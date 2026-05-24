@@ -17,6 +17,7 @@ WEBSITE_REPO_OWNER   = "SirWhack"
 WEBSITE_REPO_NAME    = "evergreenlabs.site"
 SITE_DATA_PATH       = "siteData.js"
 LLM_MODEL            = "anthropic/claude-haiku-4.5"
+GITHUB_PROJECT_NUMBER = "2"
 
 # ---------------------------------------------------------------------------
 # D1 — single database for all mutable state (ADR-0001 §D2).

@@ -14,6 +14,7 @@
 
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { runProjectSync, type ProjectEntry, type ProjectSyncSummary } from "../pipelines/project_sync";
+import { runRoadmapSync, type RoadmapEntry, type RoadmapSyncSummary } from "../pipelines/roadmap_sync";
 import { publishSiteData } from "../lib/publish";
 import { getSitePart } from "../lib/state";
 
@@ -23,6 +24,9 @@ export interface DailySyncEnv {
   GITHUB_APP_INSTALLATION_ID: string;
   GITHUB_APP_PRIVATE_KEY: string;
   GITHUB_USERNAME: string;
+  GITHUB_PROJECT_NUMBER?: string;
+  OPENROUTER_API_KEY: string;
+  LLM_MODEL?: string;
   WEBSITE_REPO_OWNER: string;
   WEBSITE_REPO_NAME: string;
   SITE_DATA_PATH: string;
@@ -43,13 +47,23 @@ export class DailySync extends WorkflowEntrypoint<DailySyncEnv, DailySyncParams>
       return summary;
     });
 
-    // Step 2: PUT the merged siteData.js to the website repo. Reads the
-    // freshly-written projects[] back from D1 so this step is self-contained
-    // and retries cleanly. Idempotent — publishSiteData returns early if the
-    // rendered file is byte-identical to what's already on the default branch.
+    // Step 2: fetch Projects v2 items, draft LLM commentary for changed items,
+    // write site_parts.roadmap. Commentary is cached by updatedAt — unchanged
+    // items produce zero LLM calls. Graceful on GraphQL failure (returns summary
+    // with error field, does not throw).
+    await step.do("roadmap_sync", async (): Promise<RoadmapSyncSummary> => {
+      return await runRoadmapSync(this.env);
+    });
+
+    // Step 3: PUT the merged siteData.js to the website repo. Reads the
+    // freshly-written projects[] and roadmap[] back from D1 so this step is
+    // self-contained and retries cleanly. Idempotent — publishSiteData returns
+    // early if the rendered file is byte-identical to what's already on the
+    // default branch.
     await step.do("publish", async () => {
       const projects = (await getSitePart<ProjectEntry[]>(this.env.DB, "projects")) ?? [];
-      await publishSiteData(this.env, { projects }, "daily-sync");
+      const roadmap = (await getSitePart<RoadmapEntry[]>(this.env.DB, "roadmap")) ?? [];
+      await publishSiteData(this.env, { projects, roadmap }, "daily-sync");
     });
   }
 }
