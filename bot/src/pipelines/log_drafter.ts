@@ -149,7 +149,9 @@ async function draftBody(
     temperature: 0.5,
     maxTokens: 300,
   });
-  return result.text.trim();
+  let text = result.text.trim();
+  text = text.replace(/^```(?:html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  return text;
 }
 
 /**

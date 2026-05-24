@@ -122,7 +122,9 @@ async function draftBlurb(
       maxTokens: 200,
     });
     // Strip surrounding quotes the model sometimes adds
-    return result.text.trim().replace(/^"+|"+$/g, "").trim();
+    return result.text.trim()
+      .replace(/^```(?:html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "")
+      .replace(/^"+|"+$/g, "").trim();
   } catch {
     return "";
   }

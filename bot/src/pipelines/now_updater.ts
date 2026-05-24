@@ -122,6 +122,8 @@ export async function updateNow(env: NowUpdaterEnv): Promise<NowUpdaterResult | 
       maxTokens: 200,
     });
     text = result.text.trim();
+    // Strip markdown code fences if the model wraps the output
+    text = text.replace(/^```(?:html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
   } catch (e: any) {
     // LLM failure — cannot draft. Bail out silently rather than crashing
     // the Workflow. Operator sees it in console logs.
