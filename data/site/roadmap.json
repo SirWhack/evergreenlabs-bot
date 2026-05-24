@@ -10,17 +10,5 @@
     "isDraft": false,
     "commentary": "replace daily cron with push-driven autoruns via github webhooks and a cloudflare worker bridge.",
     "updatedAt": "2026-05-24T02:40:02+00:00"
-  },
-  {
-    "id": "PVTI_lAHOAcFFQc4BYnivzgtopnE",
-    "title": "Auto-populate roadmap section from GitHub Projects v2",
-    "status": "Todo",
-    "priority": null,
-    "kind": null,
-    "url": "https://github.com/SirWhack/evergreenlabs-bot/issues/1",
-    "repo": "SirWhack/evergreenlabs-bot",
-    "isDraft": false,
-    "commentary": "syncs github projects v2 board to website roadmap with llm-generated commentary.",
-    "updatedAt": "2026-05-24T02:40:03+00:00"
   }
 ]

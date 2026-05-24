@@ -1,5 +1,35 @@
 [
   {
+    "date": "may 24",
+    "year": "2026",
+    "body": "added <code class=\"filename\">adr-0009</code> implementing cross-scope relationships via LightRAG and deterministic source-ID traversal. rejected LLM synthesis as a &ldquo;confabulation engine&rdquo;. now to see if relationship density hits the 15% threshold in <code class=\"filename\">handoff.md</code> before S0 exit.",
+    "project": null
+  },
+  {
+    "date": "may 24",
+    "year": "2026",
+    "body": "added ADRs for per-scope summaries and content-derived `graph_commit` to dodge LLM non-determinism. updated `KnowledgeStore.upsert` signature and fixed a stale line in `CONTEXT.md`. spent an hour arguing with the docs.",
+    "project": null
+  },
+  {
+    "date": "may 24",
+    "year": "2026",
+    "body": "added a Projects v2 pipeline via <code>github_projects.py</code> that pushes items to <code>siteData.js</code>. uses LLM commentary cached against <code>(id, updatedAt)</code> in <code>roadmap_sync.py</code> to avoid burning tokens on unchanged tasks. GraphQL is a nightmare &mdash; next is cleaning up the frontend display.",
+    "project": "evergreenlabs-bot"
+  },
+  {
+    "date": "may 24",
+    "year": "2026",
+    "body": "added `scripts/autorun.sh` and `scripts/register-task.ps1` to trigger daily runs at 9am. logs are dumped into `logs/autorun.YYYY-MM.log`. it crashes with &ldquo;connection refused&rdquo; if lm studio isn't already open—fragile, but functional.",
+    "project": "evergreenlabs-bot"
+  },
+  {
+    "date": "may 24",
+    "year": "2026",
+    "body": "added <code>bot autorun</code> to sequence sync, introduce, and log drafting—auto-accepting drafts that meet basic length requirements. stripped the &ldquo;judge:&rdquo; prefix from notes to stop leaking internal jargon. hope it doesn't hallucinate a whole new website.",
+    "project": "evergreenlabs-bot"
+  },
+  {
     "date": "may 09",
     "year": "2026",
     "body": "added 8 detectors, <code>posd-lint.toml</code> config, and a <code>/posd-review</code> skill for Claude Code. implemented SCC-based effect propagation to hit full coverage of all 18 \"red flags\" — detector count is now at 24. wrote 39 new tests; next is figuring out why the findings baseline jumped from 96 to 136.",
