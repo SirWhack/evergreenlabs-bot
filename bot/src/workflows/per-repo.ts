@@ -39,6 +39,7 @@ import {
   type PendingEvent,
 } from "../lib/state";
 import { draftLogEntries, type LogDraft } from "../pipelines/log_drafter";
+import { introduceRepo } from "../pipelines/introduce";
 
 const DEBOUNCE_SECONDS = 30;
 const LOG_DRAFTER_PIPELINE = "log_drafter";
@@ -53,6 +54,8 @@ export interface PerRepoEnv extends GhAppEnv {
   // llm.ts needs these
   OPENROUTER_API_KEY: string;
   LLM_MODEL?: string;
+  // Slice 5: introduce needs GITHUB_USERNAME to list repos
+  GITHUB_USERNAME: string;
 }
 
 export interface PerRepoParams {
@@ -92,15 +95,37 @@ export class PerRepoUpdate extends WorkflowEntrypoint<PerRepoEnv, PerRepoParams>
     // serialized return value is the concrete DrainedCommit[] (the
     // PendingEvent.payload field is `unknown` and not serializable across
     // step boundaries on its own).
-    const commits = await step.do("drain-pending", async () => {
+    const drainResult = await step.do("drain-pending", async () => {
       const events = await drainPendingEvents(this.env.DB, repoFullName);
-      return extractUniqueCommits(events, repoFullName, repoShortName);
+      const hasRepositoryCreated = events.some(
+        (ev) => ev.event === "repository" && (ev.payload as any)?.action === "created",
+      );
+      const commits = extractUniqueCommits(events, repoFullName, repoShortName);
+      return { commits, hasRepositoryCreated };
     });
 
+    const { commits, hasRepositoryCreated } = drainResult;
+
+    // --- Slice 5: introduce step for repository.created events ---
+    // Runs BEFORE log_drafter so the new project card exists before any log
+    // entries reference it. Only fires when a repository.created event was
+    // in the drained batch.
+    if (hasRepositoryCreated) {
+      await step.do("introduce", async () => {
+        const result = await introduceRepo(this.env, repoFullName);
+        if (result?.accepted) {
+          // Publish the updated projects to the site immediately
+          await publishSiteData(this.env, {
+            projects: (await getSitePart(this.env.DB, "projects")) ?? [],
+          }, "introduce");
+        }
+        return result;
+      });
+    }
+
     if (commits.length === 0) {
-      // Nothing to draft — could be a non-push event (create/repository/etc.)
-      // or a push with zero commits[]. Exit; later slices add introduce()
-      // for repository.created here.
+      // Nothing to draft — could be a non-push event or a push with zero
+      // commits[]. Exit cleanly.
       return;
     }
 

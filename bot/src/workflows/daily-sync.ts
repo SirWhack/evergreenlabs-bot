@@ -14,6 +14,7 @@
 
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { runProjectSync, type ProjectEntry, type ProjectSyncSummary } from "../pipelines/project_sync";
+import { introduceOrphans } from "../pipelines/introduce";
 import { publishSiteData } from "../lib/publish";
 import { getSitePart } from "../lib/state";
 
@@ -26,6 +27,9 @@ export interface DailySyncEnv {
   WEBSITE_REPO_OWNER: string;
   WEBSITE_REPO_NAME: string;
   SITE_DATA_PATH: string;
+  // Slice 5: introduce backstop needs LLM access
+  OPENROUTER_API_KEY: string;
+  LLM_MODEL?: string;
 }
 
 export interface DailySyncParams {
@@ -43,7 +47,15 @@ export class DailySync extends WorkflowEntrypoint<DailySyncEnv, DailySyncParams>
       return summary;
     });
 
-    // Step 2: PUT the merged siteData.js to the website repo. Reads the
+    // Step 2 (Slice 5): introduce backstop — discover repos that aren't in
+    // projects[] and aren't skipped, draft project cards for them. Runs after
+    // project_sync so we have fresh metadata, before publish so the new cards
+    // are included in the siteData.js PUT.
+    await step.do("introduce_backstop", async () => {
+      return introduceOrphans(this.env);
+    });
+
+    // Step 3: PUT the merged siteData.js to the website repo. Reads the
     // freshly-written projects[] back from D1 so this step is self-contained
     // and retries cleanly. Idempotent — publishSiteData returns early if the
     // rendered file is byte-identical to what's already on the default branch.

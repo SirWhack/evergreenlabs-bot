@@ -54,6 +54,24 @@ export async function isSkipped(db: D1Database, repo: string): Promise<boolean> 
 }
 
 /**
+ * Insert a repo into `skipped_repos` with the given reason. Idempotent —
+ * uses INSERT OR IGNORE so re-skipping an already-skipped repo is a no-op.
+ */
+export async function insertSkippedRepo(
+  db: D1Database,
+  repo: string,
+  reason: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO skipped_repos (repo, reason, skipped_at)
+       VALUES (?1, ?2, ?3)`,
+    )
+    .bind(repo, reason, nowSeconds())
+    .run();
+}
+
+/**
  * Atomically record a webhook delivery id in `webhook_dedup`.
  *
  * Returns `true` if the delivery was already seen (and the caller should
