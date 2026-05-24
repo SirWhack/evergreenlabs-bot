@@ -10,10 +10,10 @@
 // stays consistent across the migration. Sanity bar mirrors
 // autorun._passes_sanity for kind="log_entry".
 //
-// Self-feedback-loop mitigation: we skip the website repo entirely. Every
-// publish from this bot lands a chore commit on SirWhack/evergreenlabs and
-// fires a push webhook back; if we drafted from those we'd loop forever.
-// Controlled by env.WEBSITE_REPO_NAME (already set in wrangler.toml).
+// Feedback-loop guard: skip commits authored by the GitHub App itself
+// ([bot]@users.noreply.github.com). All repos are tracked — including
+// evergreenlabs-bot (dogfooding) — but the bot's own chore publishes to the
+// website repo must not trigger a new draft→publish→webhook loop.
 
 import type { CommitDetail } from "../lib/github";
 import { chat, chatJson, type LlmEnv } from "../lib/llm";
@@ -70,12 +70,6 @@ export interface LogDrafterDeps {
   env: LlmEnv;
   /** Projects array from site_parts.projects, used for slug lookup. */
   projects: Array<{ slug?: string }>;
-  /**
-   * Optional override for the website repo short name. log_drafter skips
-   * commits whose `repo` matches — this is the self-feedback-loop guard.
-   * Defaults to env.WEBSITE_REPO_NAME (callers pass it via env).
-   */
-  websiteRepoName: string;
 }
 
 export interface LogDrafterResult {
@@ -184,9 +178,8 @@ export async function draftLogEntries(
   let errored = 0;
 
   for (const commit of commits) {
-    // Self-feedback-loop guard: never log-draft commits authored on the
-    // website repo. Those are bot-generated chore commits.
-    if (commit.repo === deps.websiteRepoName) {
+    // Feedback-loop guard: skip commits authored by the bot's GitHub App.
+    if (commit.authorEmail?.includes("[bot]@users.noreply.github.com")) {
       skipped += 1;
       continue;
     }

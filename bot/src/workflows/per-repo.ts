@@ -141,7 +141,6 @@ export class PerRepoUpdate extends WorkflowEntrypoint<PerRepoEnv, PerRepoParams>
       return draftLogEntries(commitDetails, {
         env: this.env,
         projects,
-        websiteRepoName: this.env.WEBSITE_REPO_NAME,
       });
     });
 
