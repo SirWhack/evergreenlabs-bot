@@ -5,3 +5,4 @@ __pycache__/
 data/state.db
 data/drafts/*.json
 !data/drafts/.gitkeep
+logs/*.log
