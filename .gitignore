@@ -9,3 +9,7 @@ data/cache/
 data/autorun.lock
 logs/*.log
 .wrangler/
+node_modules/
+bot/.dev.vars
+bot/.dev.vars.local
+

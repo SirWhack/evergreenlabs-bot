@@ -1,7 +1,17 @@
-import type { EventRecord } from "./store";
+// Coarse webhook filter — decides whether a webhook event is worth kicking off
+// a per-repo Workflow at all. The Workflow itself does the finer filtering
+// (archived, forks, skip-list, draft sanity).
 
-// Coarse filter — decides whether to enqueue at all. The bot does its own
-// finer filtering (archived, forks, skip-list) before running.
+export interface EventRecord {
+  delivery_id: string;
+  event: string;
+  action?: string;
+  repo?: string;
+  sha?: string;
+  branch?: string;
+  ts: string;
+}
+
 export function shouldEnqueue(event: string, payload: any, expectedOwner: string): boolean {
   const ownerLogin = payload?.repository?.owner?.login;
   if (ownerLogin !== expectedOwner) return false;
@@ -14,7 +24,7 @@ export function shouldEnqueue(event: string, payload: any, expectedOwner: string
   if (event === "pull_request") {
     return payload?.action === "closed" && payload?.pull_request?.merged === true;
   }
-  if (event === "create" || event === "delete") {
+  if (event === "create" || event === "delete" || event === "repository") {
     return true;
   }
   return false;

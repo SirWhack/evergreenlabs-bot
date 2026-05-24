@@ -1,11 +1,13 @@
 {
-  "name": "evergreenlabs-bot-webhook",
-  "version": "0.1.0",
+  "name": "bot",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
+    "migrate:local": "wrangler d1 execute evergreenlabs-bot --local --file migrations/0001_init.sql",
+    "migrate:remote": "wrangler d1 execute evergreenlabs-bot --remote --file migrations/0001_init.sql",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -1,0 +1,56 @@
+name = "evergreenlabs-bot"
+main = "src/index.ts"
+compatibility_date = "2026-05-24"
+# nodejs_compat enables Buffer + Node crypto shims that some GitHub App auth
+# libraries pull in via @octokit/auth-app. Even if we stay Web-Crypto-native we
+# leave this on so swapping libs is a one-line change.
+compatibility_flags = ["nodejs_compat"]
+
+# ---------------------------------------------------------------------------
+# Non-secret config. Secrets (GITHUB_WEBHOOK_SECRET, GITHUB_APP_PRIVATE_KEY,
+# GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, OPENROUTER_API_KEY, TRIGGER_TOKEN)
+# are set via `wrangler secret put` and never live in this file.
+# ---------------------------------------------------------------------------
+[vars]
+GITHUB_USERNAME      = "SirWhack"
+WEBSITE_REPO_OWNER   = "SirWhack"
+WEBSITE_REPO_NAME    = "evergreenlabs.site"
+SITE_DATA_PATH       = "siteData.js"
+LLM_MODEL            = "anthropic/claude-haiku-4.5"
+
+# ---------------------------------------------------------------------------
+# D1 — single database for all mutable state (ADR-0001 §D2).
+# Create with:   wrangler d1 create evergreenlabs-bot
+# Paste the returned database_id below, replacing the placeholder.
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding       = "DB"
+database_name = "evergreenlabs-bot"
+database_id   = "REPLACE_VIA_WRANGLER_D1_CREATE"
+
+# ---------------------------------------------------------------------------
+# Workflows — durable, multi-step pipelines. Both classes live in
+# src/workflows/ and are re-exported from src/index.ts so wrangler can
+# register them against this same Worker script.
+# ---------------------------------------------------------------------------
+[[workflows]]
+name        = "per-repo-update"
+binding     = "PER_REPO_UPDATE"
+class_name  = "PerRepoUpdate"
+
+[[workflows]]
+name        = "daily-sync"
+binding     = "DAILY_SYNC"
+class_name  = "DailySync"
+
+# ---------------------------------------------------------------------------
+# Cron trigger — daily 03:00 UTC kicks DailySync. The same Workflow can also
+# be triggered manually via POST /trigger/daily-sync with a bearer token.
+# ---------------------------------------------------------------------------
+[triggers]
+crons = ["0 3 * * *"]
+
+# NOTE: the legacy EVENTS KV namespace is intentionally NOT bound here.
+# ADR-0001 §D3 retires it in favor of D1 dedup + direct Workflow trigger.
+# The KV namespace itself stays alive until Slice 7 cutover but is unused
+# by this Worker.
