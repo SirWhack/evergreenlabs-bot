@@ -1,140 +1,6 @@
 [
   {
     "idx": 1,
-    "slug": "pdf-to-md",
-    "title": "pdf-to-md",
-    "blurb": "Extracts structured markdown from academic and legal PDFs. Multi-column reading order, tables, footnotes, citations.",
-    "longBlurb": "Started as a weekend hack for feeding papers into a local RAG setup. Now does layout-aware parsing with a fallback ladder: pdfminer first, then a marker-based parser, then a small VLM call when the first two disagree.",
-    "writeup": "<h3>Why</h3><p>I wanted to feed a few hundred PDFs into a local search index. Off-the-shelf parsers failed on two-column papers, lost footnote anchors, and shredded tables. So I wrote my own.</p><h3>How it works</h3><p>Three-stage fallback ladder. <code>pdfminer.six</code> handles the common case (90%+ of pages). Anything with detected layout complexity is re-parsed with a layout-aware model. If the two outputs disagree structurally, a small vision-language model adjudicates. The VLM call is the slow path — it runs on about 4% of pages.</p><h3>What I'd do differently</h3><p>Started by trying to be one parser that handles everything. Should have been a router from day one. Cost me a refactor at v0.3.</p>",
-    "tags": [
-      "PIPELINE",
-      "PYTHON",
-      "PDF"
-    ],
-    "meta": "v0.7 · may 2026",
-    "stack": "Python, pdfminer, marker, qwen2-vl",
-    "status": "active",
-    "featured": false,
-    "screenshot": "",
-    "links": {
-      "repo": "",
-      "demo": "",
-      "writeup": ""
-    }
-  },
-  {
-    "idx": 2,
-    "slug": "dmscreen",
-    "title": "dmscreen",
-    "blurb": "A single-page DM screen for D&D 5e — initiative, conditions, concentration, monster lookup. Works offline.",
-    "longBlurb": "Replaces three browser tabs and a notebook. Drag in a stat block, it parses. Click a creature, it rolls initiative. Tracks concentration, exhaustion, legendary actions. Static page + IndexedDB; no server.",
-    "writeup": "<h3>Why</h3><p>Running a 5e campaign requires juggling four open tabs and a physical notebook. I wanted one URL.</p><h3>How it works</h3><p>Static page, no backend. Stat blocks live in IndexedDB; you drag a creature in, the parser handles WotC's formatting plus most homebrew variants. Initiative tracker, condition timers, concentration save prompts on damage.</p><h3>Lessons</h3><p>The hardest part isn't the parser — it's making the UI fast enough to use mid-combat. Every click that takes more than 100ms breaks the flow at the table.</p>",
-    "tags": [
-      "D&D",
-      "WEB",
-      "TS"
-    ],
-    "meta": "v1.2 · apr 2026",
-    "stack": "TypeScript, Preact, IndexedDB",
-    "status": "active",
-    "featured": false,
-    "screenshot": "",
-    "links": {
-      "repo": "",
-      "demo": "",
-      "writeup": ""
-    }
-  },
-  {
-    "idx": 3,
-    "slug": "runner",
-    "title": "runner",
-    "blurb": "An agent orchestrator for small personal jobs. YAML in, DAG out. Mixes Claude with local models, with a cost ceiling.",
-    "longBlurb": "More like a Makefile for LLMs than a framework. Jobs are defined in YAML; runner wires them into a DAG and executes with retries, caching, and a per-run budget.",
-    "writeup": "<h3>Why</h3><p>I had five or six small jobs I wanted to run on a schedule — tab summaries, standup rewrites, GitHub triage. Existing frameworks were overkill.</p><h3>How it works</h3><p>Jobs are YAML files. Each declares its inputs, model, and a prompt template. Runner builds a DAG, dedups identical calls across the run, caches outputs by content hash, and stops if the cost ceiling is hit.</p>",
-    "tags": [
-      "AGENTS",
-      "TS"
-    ],
-    "meta": "v0.4 · mar 2026",
-    "stack": "TypeScript, Bun, SQLite",
-    "status": "active",
-    "featured": false,
-    "screenshot": "",
-    "links": {
-      "repo": "",
-      "demo": "",
-      "writeup": ""
-    }
-  },
-  {
-    "idx": 4,
-    "slug": "notesearch",
-    "title": "notesearch",
-    "blurb": "Local semantic search over a folder of notes, papers, and old email exports. One endpoint, no UI.",
-    "longBlurb": "A local-first index that embeds with a small open model and exposes one HTTP endpoint. About 1,500 lines of Rust. Holds a 60GB corpus on a four-year-old laptop.",
-    "writeup": "<h3>Why</h3><p>My notes were scattered across Obsidian, old emails, Drafts exports, and a folder of saved PDFs. Grep wasn't enough.</p><h3>How it works</h3><p>Watches a folder. Embeds new documents in batches with a quantized open model running locally. Stores vectors in usearch. Exposes a single <code>/search</code> endpoint.</p>",
-    "tags": [
-      "ANALYZER",
-      "RUST"
-    ],
-    "meta": "v0.3 · feb 2026",
-    "stack": "Rust, usearch, candle",
-    "status": "active",
-    "featured": false,
-    "screenshot": "",
-    "links": {
-      "repo": "",
-      "demo": "",
-      "writeup": ""
-    }
-  },
-  {
-    "idx": 5,
-    "slug": "feedpipe",
-    "title": "feedpipe",
-    "blurb": "Normalizes RSS, newsletters (via IMAP), and podcasts into one chronological feed. Dedups near-duplicates.",
-    "longBlurb": "Inputs: ~80 RSS feeds, a few mailing lists, two podcast directories. Output: a SQLite file and a static HTML reader. The interesting part is the dedup pass.",
-    "writeup": "<h3>Why</h3><p>I subscribe to too many things. The same article shows up via three newsletters and Hacker News.</p><h3>How it works</h3><p>Polling workers per source. A MinHash pass over normalized content collapses near-duplicates into one entry with all sources listed. Threshold is currently 0.78 — earlier 0.62 was too aggressive.</p>",
-    "tags": [
-      "PIPELINE",
-      "GO"
-    ],
-    "meta": "v0.9 · jan 2026",
-    "stack": "Go, SQLite, MinHash",
-    "status": "active",
-    "featured": false,
-    "screenshot": "",
-    "links": {
-      "repo": "",
-      "demo": "",
-      "writeup": ""
-    }
-  },
-  {
-    "idx": 6,
-    "slug": "5e-monster-builder",
-    "title": "5e-monster-builder",
-    "blurb": "Homebrew monster builder for D&D 5e. Defensive/offensive CR, balance checks, prints a single-page stat block.",
-    "longBlurb": "The CR formula in the DMG underestimates most things. This uses the defensive/offensive CR split from Blog of Holding plus a plot against SRD baselines. Outputs print-ready stat-block PDFs.",
-    "writeup": "<h3>Why</h3><p>My homebrew encounters were never the difficulty I expected. The DMG's CR formula has known issues.</p><h3>How it works</h3><p>Calculates defensive and offensive CR separately, blends them, shows where the result sits on a scatter plot of SRD monsters at similar CR. Exports a PDF stat block I can print double-sided.</p>",
-    "tags": [
-      "D&D",
-      "WEB"
-    ],
-    "meta": "v0.5 · nov 2025",
-    "stack": "TypeScript, Svelte, jsPDF",
-    "status": "drowsy",
-    "featured": false,
-    "screenshot": "",
-    "links": {
-      "repo": "",
-      "demo": "",
-      "writeup": ""
-    }
-  },
-  {
-    "idx": 7,
     "slug": "posd-lint",
     "title": "posd-lint",
     "blurb": "static analysis tool surfacing violations of a philosophy of software design. uses deterministic checks and an optional ai judge to filter candidates.",
@@ -155,7 +21,7 @@
     }
   },
   {
-    "idx": 8,
+    "idx": 2,
     "slug": "banana-gun",
     "title": "banana-gun",
     "blurb": "reproduction of the sleeper agents paper on gemma 4 e4b. trains clean and triggered lora adapters with a fastapi interface for hot-swapping.",
@@ -176,7 +42,7 @@
     }
   },
   {
-    "idx": 10,
+    "idx": 3,
     "slug": "lifestrands",
     "title": "LifeStrands",
     "blurb": "ai npc system using python microservices for background memory and summary processing.",
@@ -197,7 +63,7 @@
     }
   },
   {
-    "idx": 11,
+    "idx": 4,
     "slug": "l-o-o-t",
     "title": "L.O.O.T.",
     "blurb": "",
