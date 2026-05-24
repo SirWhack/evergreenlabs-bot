@@ -25,6 +25,8 @@ class Config:
     website_sitedata_rel: str
     publish_git_commit: bool
     publish_git_push: bool
+    worker_url: str | None
+    bot_poll_token: str | None
 
     @property
     def website_sitedata_path(self) -> Path:
@@ -61,4 +63,6 @@ def load_config() -> Config:
         ),
         publish_git_commit=_bool(os.environ.get("PUBLISH_GIT_COMMIT"), True),
         publish_git_push=_bool(os.environ.get("PUBLISH_GIT_PUSH"), False),
+        worker_url=os.environ.get("WORKER_URL", "").strip() or None,
+        bot_poll_token=os.environ.get("BOT_POLL_TOKEN", "").strip() or None,
     )

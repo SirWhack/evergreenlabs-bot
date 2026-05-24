@@ -9,8 +9,10 @@ from .config import load_config
 from .autorun import run as do_autorun
 from .bootstrap import bootstrap_from_website
 from .github_client import GitHubError
+from .lock import LOCK_PATH, LockBusy, peek_lock
 from .pipelines import introduce as introduce_pipeline
 from .pipelines import log_drafter, now_updater, project_sync, roadmap_sync
+from .poll import poll_once
 from .publish import publish as do_publish
 from .review import review_loop
 
@@ -25,6 +27,9 @@ class _Group(click.Group):
         except GitHubError as e:
             console.print(f"[red]github:[/red] {e}")
             sys.exit(1)
+        except LockBusy as e:
+            console.print(f"[yellow]locked:[/yellow] {e}")
+            sys.exit(0)
         except RuntimeError as e:
             console.print(f"[red]config:[/red] {e}")
             sys.exit(1)
@@ -159,6 +164,34 @@ def publish() -> None:
     cfg = load_config()
     target = do_publish(cfg)
     console.print(f"[green]published[/green] → {target}")
+
+
+@cli.command("poll-once")
+def poll_once_cmd() -> None:
+    """One-shot: drain the Worker event queue, run autorun if any events."""
+    cfg = load_config()
+    result = poll_once(cfg)
+    if result.get("error"):
+        console.print(f"[yellow]poll:[/yellow] {result['error']}")
+        sys.exit(1)
+    if not result["ran"]:
+        console.print("[dim]poll: no events[/dim]")
+        return
+    console.print(
+        f"poll: {result['events']} event(s) → autorun → "
+        f"[green]drained {result['drained']}[/green]"
+    )
+
+
+@cli.command("autorun-status")
+def autorun_status_cmd() -> None:
+    """Show whether an autorun is currently in flight."""
+    held = peek_lock()
+    if held is None:
+        console.print(f"[dim]no lock at {LOCK_PATH}[/dim]")
+        return
+    pid, started = held
+    console.print(f"locked by pid={pid} since {started.isoformat()}")
 
 
 if __name__ == "__main__":

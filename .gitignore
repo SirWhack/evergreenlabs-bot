@@ -6,4 +6,6 @@ data/state.db
 data/drafts/*.json
 !data/drafts/.gitkeep
 data/cache/
+data/autorun.lock
 logs/*.log
+.wrangler/

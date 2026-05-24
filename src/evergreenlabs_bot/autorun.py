@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from .config import Config
 from .drafts import Draft, list_drafts, load_site_part, save_site_part
+from .lock import autorun_lock
 from .pipelines import introduce, log_drafter, now_updater, project_sync, roadmap_sync
 from .publish import publish as do_publish
 from .state import add_skip, state_conn
@@ -51,6 +52,11 @@ def _apply(d: Draft, cfg: Config) -> None:
 
 
 def run(cfg: Config) -> dict:
+    with autorun_lock():
+        return _run_locked(cfg)
+
+
+def _run_locked(cfg: Config) -> dict:
     summary: dict = {
         "sync": None,
         "introduced": 0,
