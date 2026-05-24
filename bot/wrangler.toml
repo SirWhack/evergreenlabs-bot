@@ -14,8 +14,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 GITHUB_USERNAME      = "SirWhack"
 WEBSITE_REPO_OWNER   = "SirWhack"
-WEBSITE_REPO_NAME    = "evergreenlabs.site"
-SITE_DATA_PATH       = "siteData.js"
+WEBSITE_REPO_NAME    = "evergreenlabs"
+SITE_DATA_PATH       = "src/content/siteData.js"
 LLM_MODEL            = "anthropic/claude-haiku-4.5"
 GITHUB_PROJECT_NUMBER = "2"
 
@@ -27,7 +27,7 @@ GITHUB_PROJECT_NUMBER = "2"
 [[d1_databases]]
 binding       = "DB"
 database_name = "evergreenlabs-bot"
-database_id   = "REPLACE_VIA_WRANGLER_D1_CREATE"
+database_id   = "b54c264e-c79b-4deb-9719-08c32052a8c2"
 
 # ---------------------------------------------------------------------------
 # Workflows — durable, multi-step pipelines. Both classes live in
