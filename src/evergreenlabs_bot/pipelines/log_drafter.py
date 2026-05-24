@@ -11,7 +11,7 @@ from ..state import get_cursor, set_cursor, state_conn
 
 
 PIPELINE = "log_drafter"
-SKIP_NAMES = {"evergreenlabs", "evergreenlabs-bot"}
+SKIP_NAMES = {"evergreenlabs"}
 
 
 JUDGE_SYSTEM = """\

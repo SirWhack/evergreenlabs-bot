@@ -7,7 +7,7 @@ from ..llm_client import LLMClient
 from ..state import is_skipped, state_conn
 
 
-SKIP_NAMES = {"evergreenlabs", "evergreenlabs-bot"}
+SKIP_NAMES = {"evergreenlabs"}
 
 
 def _sluggify(name: str) -> str:

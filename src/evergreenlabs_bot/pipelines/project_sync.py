@@ -8,7 +8,7 @@ from ..github_client import GitHubClient, Repo
 from ..state import is_skipped, state_conn
 
 
-SKIP_NAMES = {"evergreenlabs", "evergreenlabs-bot"}
+SKIP_NAMES = {"evergreenlabs"}
 
 
 def _meta_string(repo: Repo) -> str:

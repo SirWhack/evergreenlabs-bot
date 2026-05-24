@@ -27,7 +27,7 @@ Write the now.text body.
 """
 
 
-SKIP_NAMES = {"evergreenlabs", "evergreenlabs-bot"}
+SKIP_NAMES = {"evergreenlabs"}
 
 
 def run(cfg: Config) -> bool:
