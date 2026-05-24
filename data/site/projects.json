@@ -195,5 +195,24 @@
       "demo": "",
       "writeup": ""
     }
+  },
+  {
+    "idx": 11,
+    "slug": "l-o-o-t",
+    "title": "L.O.O.T.",
+    "blurb": "",
+    "longBlurb": "",
+    "writeup": "",
+    "tags": [],
+    "meta": "updated sep 2025",
+    "stack": "",
+    "status": "active",
+    "featured": false,
+    "screenshot": "",
+    "links": {
+      "repo": "https://github.com/SirWhack/L.O.O.T.",
+      "demo": "",
+      "writeup": ""
+    }
   }
 ]
