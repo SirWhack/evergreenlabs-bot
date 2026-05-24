@@ -1,0 +1,15 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
+# In production set these with `wrangler secret put <NAME>`.
+#
+# NOTE: BOT_POLL_TOKEN is retired (ADR-0001 §D3). The legacy KV-queue +
+# /events polling endpoints are gone; manual triggering uses TRIGGER_TOKEN
+# against POST /trigger/daily-sync.
+
+GITHUB_WEBHOOK_SECRET=
+GITHUB_APP_ID=
+GITHUB_APP_INSTALLATION_ID=
+# PEM (BEGIN/END RSA PRIVATE KEY ...) on a single line — use \n for newlines,
+# or paste a literal multi-line value when using `wrangler secret put`.
+GITHUB_APP_PRIVATE_KEY=
+OPENROUTER_API_KEY=
+TRIGGER_TOKEN=
