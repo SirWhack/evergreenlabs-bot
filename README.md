@@ -1,76 +1,50 @@
 # evergreenlabs-bot
 
-Local automation for the evergreenlabs website. Watches your public GitHub repos,
-drafts log entries from logworthy commits via a local LLM, and writes the result
-back into the website's `siteData.js`.
+Cloud-native automation for the [evergreenlabs](https://github.com/SirWhack/evergreenlabs) website. Watches all public SirWhack repos via GitHub webhooks, drafts log entries from logworthy commits via LLM, and publishes back to the website's `siteData.js`.
 
-## Model
+Runs entirely on Cloudflare Workers + Workflows + D1. No local machine dependency.
 
-- **Canonical content** lives in `data/site/*.json` here (not in the website).
-- The website's `src/content/siteData.js` is a generated artifact, rebuilt by
-  `bot publish`.
-- **Two paths:**
-  - *Auto-sync* (no review): `bot sync-projects` updates `projects[]` metadata
-    (stack, last-touched, repo link) directly from GitHub.
-  - *Drafted* (review queue): `bot catch-up` pulls new commits since the last
-    cursor, drafts log entries + `now.text` updates via the LLM, and drops them
-    into `data/drafts/`. `bot review` walks the queue.
+## Architecture
 
-## Setup
+- **Cloudflare Worker** at `https://evergreenlabs-bot.swynnr.workers.dev`
+- **Two Workflows:**
+  - `PerRepoUpdate` — webhook-triggered. Debounces pushes per repo, then runs: introduce (for new repos) → log_drafter (judge + draft) → now_updater → publish.
+  - `DailySync` — cron (03:00 UTC) + manual trigger. Runs: project_sync → introduce backstop → roadmap_sync → publish.
+- **D1** for all mutable state (site_parts, drafts, cursors, skipped_repos, webhook_dedup, pending_events).
+- **GitHub Contents API** for publishing `siteData.js` (no git clones).
+- **OpenRouter** (`anthropic/claude-haiku-4.5`) for LLM calls.
+
+## Development
 
 ```bash
-cd /home/swynn/Code/evergreenlabs-bot
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-cp .env.example .env       # then fill in
-bot bootstrap              # one-time: import current siteData.js into data/site/
+cd bot/
+npm install
+npm run migrate:local          # apply D1 schema locally
+npx wrangler dev               # local Worker with hot reload
+
+# smoke test
+curl -X POST http://localhost:8787/trigger/daily-sync \
+  -H "Authorization: Bearer $TRIGGER_TOKEN"
 ```
 
-## Daily use
+## Deployment
 
 ```bash
-bot catch-up               # fetch new commits, draft log entries + now.text
-bot review                 # walk pending drafts (accept / edit / reject)
-bot sync-projects          # refresh projects[] metadata from GitHub
-bot publish                # regenerate siteData.js and (optionally) commit + push
+cd bot/
+npx wrangler deploy
+npm run migrate:remote         # apply any new migrations to live D1
+
+# manual trigger
+curl -X POST https://evergreenlabs-bot.swynnr.workers.dev/trigger/daily-sync \
+  -H "Authorization: Bearer $TRIGGER_TOKEN"
 ```
 
-`bot catch-up` is idempotent — running it after a week away processes
-everything since the last cursor in one go.
+## Configuration
 
-## Reuse on another site
+Non-secret config lives in `bot/wrangler.toml` `[vars]`. Secrets are set via `wrangler secret put <NAME>`.
 
-This repo ships a Claude Code skill at `.claude/skills/site-bot/` that
-walks Claude through scaffolding the same pattern for a different site.
-To make it globally available:
+Required secrets: `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `OPENROUTER_API_KEY`, `TRIGGER_TOKEN`.
 
-```bash
-ln -s "$(pwd)/.claude/skills/site-bot" ~/.claude/skills/site-bot
-```
+## Decisions
 
-Then `/site-bot` from any project Claude Code session.
-
-## Files
-
-```
-src/evergreenlabs_bot/
-  cli.py              entrypoint (bot ...)
-  config.py           env loading
-  github_client.py    repos + commits via GitHub REST
-  llm_client.py       OpenAI-compatible client wrapping the local server
-  state.py            sqlite: per-(repo, pipeline) cursors
-  drafts.py           draft model + on-disk queue
-  publish.py          JSON -> siteData.js + git
-  review.py           interactive review TUI
-  bootstrap.py        one-time siteData.js -> JSON import
-  pipelines/
-    project_sync.py
-    log_drafter.py
-    now_updater.py
-
-data/
-  site/               canonical JSON (committed)
-  drafts/             pending drafts (gitignored)
-  state.db            sqlite cursors (gitignored)
-```
+See `docs/adr/0001-cloud-migration.md` for the full architecture decision record.
