@@ -10,7 +10,9 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
+from .config import load_config
 from .drafts import Draft, list_drafts, load_site_part, save_site_part
+from .pipelines import now_updater
 from .state import add_skip, state_conn
 
 
@@ -60,18 +62,25 @@ def _edit_text(initial: str) -> str:
         os.unlink(path)
 
 
-def _apply_accepted(d: Draft) -> None:
+def _apply_accepted(d: Draft) -> bool:
+    """Apply an accepted draft. Returns True if a fresh now_text draft was queued."""
     if d.kind == "log_entry":
         log = load_site_part("log", [])
         # Insert at top (log is newest-first); avoid duplicate by id check.
         log.insert(0, d.payload)
         save_site_part("log", log)
-    elif d.kind == "now_text":
+        # Each accepted log entry refreshes the "currently working on" candidate.
+        try:
+            return now_updater.draft_from_log_entry(load_config(), d.payload)
+        except Exception:
+            return False
+    if d.kind == "now_text":
         save_site_part("now", d.payload)
     elif d.kind == "project_intro":
         projects = load_site_part("projects", [])
         projects.append(d.payload)
         save_site_part("projects", projects)
+    return False
 
 
 def _apply_rejected(d: Draft) -> None:
@@ -120,6 +129,9 @@ def review_loop() -> None:
             if confirm != "y":
                 continue
         d.status = "accepted"
-        _apply_accepted(d)
+        triggered_now = _apply_accepted(d)
         d.delete()
-        console.print("[green]accepted[/green]\n")
+        msg = "[green]accepted[/green]"
+        if triggered_now:
+            msg += " [dim](queued a fresh now.text candidate — see it on next review)[/dim]"
+        console.print(msg + "\n")
