@@ -39,6 +39,7 @@ import {
   type PendingEvent,
 } from "../lib/state";
 import { draftLogEntries, type LogDraft } from "../pipelines/log_drafter";
+import { updateNow } from "../pipelines/now_updater";
 
 const DEBOUNCE_SECONDS = 30;
 const LOG_DRAFTER_PIPELINE = "log_drafter";
@@ -179,12 +180,25 @@ export class PerRepoUpdate extends WorkflowEntrypoint<PerRepoEnv, PerRepoParams>
       });
     }
 
-    // Phase 7 — publish if anything was accepted. Held-for-review drafts
-    // sit in D1 and do NOT touch the live site.
+    // Phase 7 — now_updater: refresh the "now" text when log entries were
+    // accepted. Runs before publish so site_parts.now is up-to-date when the
+    // single publish step fires. On fumble (text < 10 chars), a
+    // held_for_review draft is inserted and site_parts.now is left untouched.
+    // (Slice 6 — #9)
+    if (accepted.length > 0) {
+      await step.do("now-updater", async () => {
+        await updateNow(this.env);
+      });
+    }
+
+    // Phase 8 — publish if anything was accepted. Held-for-review drafts
+    // sit in D1 and do NOT touch the live site. Publishes all of site_parts
+    // that have been mutated (log + now) in a single Contents API PUT.
     if (accepted.length > 0) {
       await step.do("publish", async () => {
         const log = (await getSitePart<unknown>(this.env.DB, "log")) ?? [];
-        await publishSiteData(this.env, { log }, "log_drafter");
+        const now = (await getSitePart<unknown>(this.env.DB, "now")) ?? {};
+        await publishSiteData(this.env, { log, now }, "log_drafter+now_updater");
       });
     }
   }
