@@ -195,6 +195,32 @@ export async function ghFetch(
 }
 
 /**
+ * Execute a GraphQL query against the GitHub API. Uses the same App
+ * installation token as `ghFetch`. Returns the parsed JSON response body.
+ * Throws on HTTP errors or GraphQL-level errors.
+ */
+export async function ghGraphQL<T = unknown>(
+  env: GhAppEnv,
+  query: string,
+  variables: Record<string, unknown> = {},
+): Promise<T> {
+  const res = await ghFetch(env, "https://api.github.com/graphql", {
+    method: "POST",
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `ghGraphQL: HTTP ${res.status} ${await res.text()}`,
+    );
+  }
+  const body = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
+  if (body.errors && body.errors.length > 0) {
+    throw new Error(`ghGraphQL errors: ${body.errors[0].message}`);
+  }
+  return body.data as T;
+}
+
+/**
  * Mirrors the Python `Commit` dataclass — the shape `log_drafter` prompts
  * expect. Built from a `GET /repos/{owner}/{repo}/commits/{sha}` response.
  */
