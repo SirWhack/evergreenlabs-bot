@@ -195,6 +195,75 @@ export async function ghFetch(
 }
 
 /**
+ * Mirrors the Python `Commit` dataclass — the shape `log_drafter` prompts
+ * expect. Built from a `GET /repos/{owner}/{repo}/commits/{sha}` response.
+ */
+export interface CommitDetail {
+  sha: string;
+  repo: string;
+  message: string;
+  authorLogin: string | null;
+  authorEmail: string | null;
+  authorName: string | null;
+  date: string; // ISO
+  url: string;
+  filesChanged: string[];
+  additions: number;
+  deletions: number;
+}
+
+/**
+ * Fetch the per-commit detail blob (stats + file list) for a single SHA.
+ * The push webhook payload's `commits[]` only contains message + author +
+ * touched-paths arrays; it does not include +/- counts. We need those for
+ * the judge prompt, so this round-trips one GET per commit.
+ *
+ * `repoFullName` is `owner/name`; `repoShortName` is what we record on the
+ * Commit (matches Python `repo` field).
+ */
+export async function fetchCommitDetail(
+  env: GhAppEnv,
+  repoFullName: string,
+  repoShortName: string,
+  sha: string,
+): Promise<CommitDetail> {
+  const res = await ghFetch(env, `/repos/${repoFullName}/commits/${sha}`);
+  if (!res.ok) {
+    throw new Error(
+      `github: GET commit ${repoFullName}@${sha} failed ${res.status} ${await res.text()}`,
+    );
+  }
+  const raw = (await res.json()) as {
+    sha: string;
+    html_url: string;
+    author?: { login?: string } | null;
+    commit: {
+      message: string;
+      author?: { name?: string; email?: string; date?: string };
+      committer?: { date?: string };
+    };
+    files?: Array<{ filename: string }>;
+    stats?: { additions?: number; deletions?: number };
+  };
+  const files = (raw.files ?? []).slice(0, 50).map((f) => f.filename);
+  const dateStr =
+    raw.commit.author?.date ?? raw.commit.committer?.date ?? new Date().toISOString();
+  return {
+    sha: raw.sha,
+    repo: repoShortName,
+    message: (raw.commit.message ?? "").trim(),
+    authorLogin: raw.author?.login ?? null,
+    authorEmail: raw.commit.author?.email ?? null,
+    authorName: raw.commit.author?.name ?? null,
+    date: dateStr,
+    url: raw.html_url,
+    filesChanged: files,
+    additions: raw.stats?.additions ?? 0,
+    deletions: raw.stats?.deletions ?? 0,
+  };
+}
+
+/**
  * Parse a GitHub Link header to extract the rel="next" URL, or null if absent.
  * Format example:
  *   <https://api.github.com/...?page=2>; rel="next", <...?page=5>; rel="last"

@@ -4,7 +4,7 @@
 
 import { verifyGitHubSignature } from "./lib/verify";
 import { shouldEnqueue } from "./lib/filter";
-import { seenDelivery } from "./lib/state";
+import { enqueuePendingEvent, seenDelivery } from "./lib/state";
 
 // Re-exports so wrangler can register the Workflow classes against this
 // Worker script (see [[workflows]] bindings in wrangler.toml).
@@ -89,21 +89,26 @@ async function handleWebhook(req: Request, env: Env): Promise<Response> {
     return new Response(null, { status: 204 });
   }
 
-  // Singleton-per-repo: instance id derived from the repo name means a burst
-  // of pushes within the Workflow's debounce window coalesces into a single
-  // instance. Slashes are not legal in Workflow instance ids.
-  const instanceId = repoFullName.replace(/\//g, "__");
-  try {
-    await env.PER_REPO_UPDATE.create({
-      id: instanceId,
-      params: { repo: repoFullName, delivery_id: deliveryId, event },
-    });
-  } catch (err: any) {
-    // Re-create within the singleton window is expected — surfaces as
-    // "instance already exists". That's the debounce working as intended.
-    const msg = String(err?.message ?? err);
-    if (!/already exists/i.test(msg)) throw err;
-  }
+  // Always record the raw event in pending_events FIRST. This is the queue
+  // the per-repo Workflow drains after its debounce sleep. Coalescing comes
+  // from this queue, NOT from Workflow instance id uniqueness — Cloudflare
+  // Workflows refuse to reuse an instance id within the retention window
+  // (~days), so a deterministic per-repo id would self-immolate after the
+  // first push. Instead, every webhook creates a fresh instance with a
+  // unique id; each instance sleeps DEBOUNCE_SECONDS and then drains
+  // pending_events for its repo. The first instance to drain wins; later
+  // instances find an empty queue and exit cheaply.
+  await enqueuePendingEvent(env.DB, repoFullName, deliveryId, event, payload);
+
+  // Unique instance id per delivery. Delivery IDs are guaranteed unique by
+  // GitHub. Sanitize underscore for readability — Workflows accept the raw
+  // value but it's nicer in `wrangler workflows instances list`.
+  const sanitizedRepo = repoFullName.replace(/\//g, "__");
+  const instanceId = `${sanitizedRepo}__${deliveryId}`;
+  await env.PER_REPO_UPDATE.create({
+    id: instanceId,
+    params: { repo: repoFullName, delivery_id: deliveryId, event },
+  });
 
   return new Response(null, { status: 204 });
 }
