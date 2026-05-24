@@ -39,6 +39,18 @@ bot publish                # regenerate siteData.js and (optionally) commit + pu
 `bot catch-up` is idempotent — running it after a week away processes
 everything since the last cursor in one go.
 
+## Reuse on another site
+
+This repo ships a Claude Code skill at `.claude/skills/site-bot/` that
+walks Claude through scaffolding the same pattern for a different site.
+To make it globally available:
+
+```bash
+ln -s "$(pwd)/.claude/skills/site-bot" ~/.claude/skills/site-bot
+```
+
+Then `/site-bot` from any project Claude Code session.
+
 ## Files
 
 ```
