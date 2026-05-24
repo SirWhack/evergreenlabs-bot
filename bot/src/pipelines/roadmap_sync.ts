@@ -11,7 +11,7 @@
 //   - Output shape matches data/site/roadmap.json.
 //   - GraphQL failures are caught and logged — they do NOT crash DailySync.
 
-import { ghGraphQL, type GhAppEnv } from "../lib/github";
+import type { GhAppEnv } from "../lib/github";
 import { chat, type LlmEnv } from "../lib/llm";
 import { getSitePart, putSitePart } from "../lib/state";
 
@@ -45,6 +45,8 @@ export interface RoadmapSyncEnv extends GhAppEnv, LlmEnv {
   DB: D1Database;
   GITHUB_USERNAME: string;
   GITHUB_PROJECT_NUMBER?: string;
+  /** Classic PAT with `read:project` scope — GitHub Apps can't access user-owned Projects v2. */
+  GITHUB_PAT_PROJECTS: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -270,14 +272,30 @@ export async function runRoadmapSync(
     return summary;
   }
 
-  // Fetch Projects v2 items via GraphQL
+  // Fetch Projects v2 items via GraphQL using a classic PAT — GitHub Apps
+  // cannot access user-owned Projects v2 (platform limitation).
   let items: ProjectItemNode[];
   try {
-    const data = await ghGraphQL<ProjectsV2Response>(env, PROJECTS_V2_QUERY, {
-      login: env.GITHUB_USERNAME,
-      number: projectNumber,
+    const res = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.GITHUB_PAT_PROJECTS}`,
+        "Content-Type": "application/json",
+        "User-Agent": "evergreenlabs-bot",
+      },
+      body: JSON.stringify({
+        query: PROJECTS_V2_QUERY,
+        variables: { login: env.GITHUB_USERNAME, number: projectNumber },
+      }),
     });
-    const project = data.user?.projectV2;
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${await res.text()}`);
+    }
+    const body = (await res.json()) as { data?: ProjectsV2Response; errors?: Array<{ message: string }> };
+    if (body.errors?.length) {
+      throw new Error(body.errors[0].message);
+    }
+    const project = body.data?.user?.projectV2;
     if (!project) {
       summary.error = `Project #${projectNumber} not found under user ${env.GITHUB_USERNAME}`;
       return summary;

@@ -16,6 +16,7 @@ export interface DailySyncEnv {
   GITHUB_APP_PRIVATE_KEY: string;
   GITHUB_USERNAME: string;
   GITHUB_PROJECT_NUMBER?: string;
+  GITHUB_PAT_PROJECTS: string;
   OPENROUTER_API_KEY: string;
   LLM_MODEL?: string;
   WEBSITE_REPO_OWNER: string;
