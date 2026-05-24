@@ -42,6 +42,18 @@ export async function putSitePart(
 }
 
 /**
+ * Returns true if `repo` (by short name) is in the `skipped_repos` table.
+ * Mirrors the Python `state.is_skipped(conn, repo)`.
+ */
+export async function isSkipped(db: D1Database, repo: string): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT 1 AS one FROM skipped_repos WHERE repo = ?1")
+    .bind(repo)
+    .first<{ one: number }>();
+  return row !== null;
+}
+
+/**
  * Atomically record a webhook delivery id in `webhook_dedup`.
  *
  * Returns `true` if the delivery was already seen (and the caller should
