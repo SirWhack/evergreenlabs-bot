@@ -1,0 +1,17 @@
+{
+  "name": "Sam",
+  "fullName": "",
+  "location": "Austin, TX",
+  "headline": "Software engineer. I build pipelines, agents, and analyzers at work, and a handful of D&D tools on the side. This page is mostly a list of those.",
+  "bio": [
+    "I'm Sam. I work as a software engineer — mostly on document-processing pipelines and the analyzers that live downstream of them. After hours I keep building things in a similar shape, plus a few tools for the D&D campaign I've been running since 2023.",
+    "The projects above are the ones I'm still actively touching. The log is for the small things — what I tried, what didn't work, what I'll come back to. If any of this overlaps with what you're doing, get in touch."
+  ],
+  "email": "sam@example.com",
+  "links": {
+    "github": "",
+    "linkedin": "",
+    "mastodon": "",
+    "resume": ""
+  }
+}

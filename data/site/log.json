@@ -1,0 +1,49 @@
+[
+  {
+    "date": "may 21",
+    "year": "2026",
+    "project": "pdf-to-md",
+    "body": "<code>pdf-to-md</code>: swapped the VLM fallback for a smaller open model. Faster and cheaper, but it loses small-caps as italics about a third of the time. Reverting."
+  },
+  {
+    "date": "may 09",
+    "year": "2026",
+    "project": "runner",
+    "body": "Set up <code>runner</code> to summarize my open browser tabs every morning at 7. Costs about a nickel a day. The summaries are mediocre but I keep reading them."
+  },
+  {
+    "date": "may 02",
+    "year": "2026",
+    "project": "dmscreen",
+    "body": "<code>dmscreen</code> now auto-rolls concentration saves on damage. Took two evenings and a session where I nearly killed a PC by mis-rolling."
+  },
+  {
+    "date": "apr 24",
+    "year": "2026",
+    "project": "notesearch",
+    "body": "Tried boosting recency in <code>notesearch</code>. The math was right; the results got worse. Stale notes are more useful when surfaced more, not less."
+  },
+  {
+    "date": "apr 11",
+    "year": "2026",
+    "project": "dmscreen",
+    "body": "Ported <code>dmscreen</code>'s dice roller to WebAssembly to see if it'd be faster. It is not. Reverted in 20 minutes."
+  },
+  {
+    "date": "mar 28",
+    "year": "2026",
+    "project": "feedpipe",
+    "body": "<code>feedpipe</code> was collapsing distinct writers riffing on the same article. Loosened the MinHash threshold from 0.62 to 0.78 and added a &ldquo;related&rdquo; cluster instead of merging."
+  },
+  {
+    "date": "mar 14",
+    "year": "2026",
+    "body": "Spent a Saturday on a sentiment analyzer for my git commit messages. Works, kind of. Not sure I want to know."
+  },
+  {
+    "date": "feb 27",
+    "year": "2026",
+    "project": "5e-monster-builder",
+    "body": "<code>5e-monster-builder</code>: switched from DMG-as-written CR to the defensive/offensive split. My encounters stopped being trivial."
+  }
+]

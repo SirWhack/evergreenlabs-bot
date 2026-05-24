@@ -1,0 +1,22 @@
+[project]
+name = "evergreenlabs-bot"
+version = "0.1.0"
+description = "Local automation that drafts log entries and syncs project metadata into the evergreenlabs website."
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "httpx>=0.27",
+    "openai>=1.40",
+    "python-dotenv>=1.0",
+    "rich>=13.7",
+]
+
+[project.scripts]
+bot = "evergreenlabs_bot.cli:cli"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
