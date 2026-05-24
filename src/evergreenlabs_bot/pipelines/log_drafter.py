@@ -158,7 +158,7 @@ def run(cfg: Config, *, limit_per_repo: int = 30) -> dict:
                     source_commits=[commit.sha],
                     source_repo=repo.name,
                 )
-                draft.notes = f"judge: {reason}"
+                draft.notes = reason
                 draft.save()
                 summary["drafts"] += 1
                 set_cursor(conn, repo.name, PIPELINE, commit.sha)

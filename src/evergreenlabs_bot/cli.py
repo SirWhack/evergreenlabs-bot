@@ -6,6 +6,7 @@ import click
 from rich.console import Console
 
 from .config import load_config
+from .autorun import run as do_autorun
 from .bootstrap import bootstrap_from_website
 from .github_client import GitHubError
 from .pipelines import introduce as introduce_pipeline
@@ -112,6 +113,28 @@ def introduce() -> None:
     )
     if summary["drafts"]:
         console.print("[dim]Next: `bot review` to walk them.[/dim]")
+
+
+@cli.command()
+def autorun() -> None:
+    """Fully autonomous: sync, introduce, draft, auto-accept (if sane), publish."""
+    cfg = load_config()
+    s = do_autorun(cfg)
+    sync = s["sync"]
+    console.print(
+        f"sync:        scanned {sync['scanned']}, "
+        f"{sync['updated']} updated, "
+        f"{sync['unintroduced']} unintroduced"
+    )
+    console.print(
+        f"drafts:      {s['introduced']} introductions, "
+        f"{s['log_drafts']} log ({s['log_drafts_skipped']} commits skipped)"
+    )
+    console.print(
+        f"applied:     [green]{s['accepted']}[/green] accepted, "
+        f"{s['held_for_review']} held for review"
+    )
+    console.print(f"publish:     [green]done[/green]" if s["published"] else "publish:     [yellow]skipped[/yellow]")
 
 
 @cli.command()
