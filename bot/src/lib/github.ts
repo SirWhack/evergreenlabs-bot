@@ -290,6 +290,27 @@ export async function fetchCommitDetail(
 }
 
 /**
+ * Fetch the raw README content for a repository. Returns the text on success,
+ * or null if the repo has no README (404). Uses the "raw" media type so the
+ * response body is plain text rather than Base64-encoded JSON.
+ */
+export async function fetchReadme(
+  env: GhAppEnv,
+  repoFullName: string,
+): Promise<string | null> {
+  const res = await ghFetch(env, `/repos/${repoFullName}/readme`, {
+    headers: { Accept: "application/vnd.github.raw" },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(
+      `fetchReadme: ${repoFullName} returned ${res.status} ${await res.text()}`,
+    );
+  }
+  return res.text();
+}
+
+/**
  * Parse a GitHub Link header to extract the rel="next" URL, or null if absent.
  * Format example:
  *   <https://api.github.com/...?page=2>; rel="next", <...?page=5>; rel="last"
