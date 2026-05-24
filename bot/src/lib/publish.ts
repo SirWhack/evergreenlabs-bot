@@ -184,7 +184,7 @@ export async function publishSiteData(
     const merged = deepMerge(parsed, partial);
     const newText = renderSiteData(merged);
     if (newText === text) return; // idempotent, no-op publish
-    const message = `chore(bot): ${kind} tracer @ ${new Date().toISOString()}`;
+    const message = `chore(bot): ${kind} @ ${new Date().toISOString()}`;
     const res = await writeSiteData(env, newText, sha, message);
     if (res.ok) return;
     if (res.status === 409 && attempt === 0) continue; // retry once
