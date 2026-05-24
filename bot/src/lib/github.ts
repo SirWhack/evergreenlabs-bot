@@ -193,3 +193,74 @@ export async function ghFetch(
   headers.set("X-GitHub-Api-Version", "2022-11-28");
   return fetch(url, { ...init, headers });
 }
+
+/**
+ * Parse a GitHub Link header to extract the rel="next" URL, or null if absent.
+ * Format example:
+ *   <https://api.github.com/...?page=2>; rel="next", <...?page=5>; rel="last"
+ */
+function parseNextLink(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  const parts = linkHeader.split(",");
+  for (const part of parts) {
+    const m = part.match(/<([^>]+)>\s*;\s*rel="next"/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/** Minimal repo metadata we care about for project_sync — mirrors Python `Repo`. */
+export interface GhRepo {
+  name: string;
+  full_name: string;
+  description: string | null;
+  html_url: string;
+  default_branch: string;
+  /** ISO-8601 string (e.g. "2026-05-20T12:34:56Z"). */
+  pushed_at: string;
+  archived: boolean;
+  fork: boolean;
+  language: string | null;
+  topics: string[];
+}
+
+/**
+ * List the configured user's public repositories, App-authenticated.
+ * Mirrors Python `GitHubClient.list_public_repos`:
+ *   GET /users/{username}/repos?type=owner&sort=pushed&per_page=100
+ * Follows `Link: rel="next"` pagination.
+ */
+export async function listPublicRepos(
+  env: GhAppEnv,
+  username: string,
+): Promise<GhRepo[]> {
+  let url: string | null =
+    `https://api.github.com/users/${encodeURIComponent(username)}/repos` +
+    `?type=owner&sort=pushed&per_page=100`;
+  const out: GhRepo[] = [];
+  while (url) {
+    const res: Response = await ghFetch(env, url);
+    if (!res.ok) {
+      throw new Error(
+        `listPublicRepos: ${res.status} ${await res.text()}`,
+      );
+    }
+    const page = (await res.json()) as Array<Record<string, unknown>>;
+    for (const raw of page) {
+      out.push({
+        name: String(raw.name),
+        full_name: String(raw.full_name),
+        description: (raw.description ?? null) as string | null,
+        html_url: String(raw.html_url),
+        default_branch: String(raw.default_branch ?? "main"),
+        pushed_at: String(raw.pushed_at),
+        archived: Boolean(raw.archived),
+        fork: Boolean(raw.fork),
+        language: (raw.language ?? null) as string | null,
+        topics: Array.isArray(raw.topics) ? (raw.topics as string[]) : [],
+      });
+    }
+    url = parseNextLink(res.headers.get("Link"));
+  }
+  return out;
+}
