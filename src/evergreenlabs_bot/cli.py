@@ -10,7 +10,7 @@ from .autorun import run as do_autorun
 from .bootstrap import bootstrap_from_website
 from .github_client import GitHubError
 from .pipelines import introduce as introduce_pipeline
-from .pipelines import log_drafter, now_updater, project_sync
+from .pipelines import log_drafter, now_updater, project_sync, roadmap_sync
 from .publish import publish as do_publish
 from .review import review_loop
 
@@ -113,6 +113,22 @@ def introduce() -> None:
     )
     if summary["drafts"]:
         console.print("[dim]Next: `bot review` to walk them.[/dim]")
+
+
+@cli.command("sync-roadmap")
+@click.option("--no-commentary", is_flag=True, help="Skip LLM per-item commentary.")
+def sync_roadmap(no_commentary: bool) -> None:
+    """Pull items from the configured Projects v2 board into data/site/roadmap.json."""
+    cfg = load_config()
+    s = roadmap_sync.run(cfg, with_commentary=not no_commentary)
+    console.print(
+        f"  fetched {s['fetched']}, "
+        f"[green]{s['kept']}[/green] kept, "
+        f"{s['hidden_done']} hidden (done-ish), "
+        f"commentary: {s['commentary_new']} new / {s['commentary_cached']} cached"
+    )
+    if s.get("note"):
+        console.print(f"[dim]{s['note']}[/dim]")
 
 
 @cli.command()

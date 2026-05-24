@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from .config import Config
 from .drafts import Draft, list_drafts, load_site_part, save_site_part
-from .pipelines import introduce, log_drafter, now_updater, project_sync
+from .pipelines import introduce, log_drafter, now_updater, project_sync, roadmap_sync
 from .publish import publish as do_publish
 from .state import add_skip, state_conn
 
@@ -63,6 +63,13 @@ def run(cfg: Config) -> dict:
 
     # 1. Project metadata (no LLM, fully deterministic).
     summary["sync"] = project_sync.sync_projects(cfg)
+
+    # 1b. Roadmap (Projects v2 → site). LLM commentary is cached against
+    #     item updatedAt, so reruns are cheap.
+    try:
+        summary["roadmap"] = roadmap_sync.run(cfg)
+    except Exception as e:
+        summary["roadmap"] = {"error": str(e)}
 
     # 2. Introduce unknown public repos.
     intro_summary = introduce.run(cfg)

@@ -17,6 +17,7 @@ STATE_DB = DATA_DIR / "state.db"
 class Config:
     github_username: str
     github_token: str | None
+    github_project_number: int | None
     llm_base_url: str
     llm_api_key: str
     llm_model: str
@@ -44,9 +45,11 @@ def load_config() -> Config:
     model = os.environ.get("LLM_MODEL", "").strip()
     if not model:
         raise RuntimeError("LLM_MODEL not set in .env")
+    project_raw = os.environ.get("GITHUB_PROJECT_NUMBER", "").strip()
     return Config(
         github_username=username,
         github_token=os.environ.get("GITHUB_TOKEN", "").strip() or None,
+        github_project_number=int(project_raw) if project_raw.isdigit() else None,
         llm_base_url=os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1").strip(),
         llm_api_key=os.environ.get("LLM_API_KEY", "not-needed").strip() or "not-needed",
         llm_model=model,

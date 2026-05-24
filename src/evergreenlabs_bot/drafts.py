@@ -37,6 +37,7 @@ def load_site() -> dict:
         "profile": load_site_part("profile", {}),
         "now": load_site_part("now", {"weekOf": "", "text": ""}),
         "projects": load_site_part("projects", []),
+        "roadmap": load_site_part("roadmap", []),
         "log": load_site_part("log", []),
     }
 

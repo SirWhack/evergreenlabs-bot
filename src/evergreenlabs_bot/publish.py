@@ -24,6 +24,7 @@ def render_sitedata_js(site: dict) -> str:
         "profile": site.get("profile", {}),
         "now": site.get("now", {}),
         "projects": site.get("projects", []),
+        "roadmap": site.get("roadmap", []),
         "log": site.get("log", []),
     }
     payload = json.dumps(site_ordered, indent=2, ensure_ascii=False)

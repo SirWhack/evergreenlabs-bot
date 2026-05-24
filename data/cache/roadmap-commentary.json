@@ -1,0 +1,4 @@
+{
+  "PVTI_lAHOAcFFQc4BYnivzgtopnE::2026-05-24T02:40:03+00:00": "syncs github projects v2 board to website roadmap with llm-generated commentary.",
+  "PVTI_lAHOAcFFQc4BYnivzgtopnI::2026-05-24T02:40:02+00:00": "replace daily cron with push-driven autoruns via github webhooks and a cloudflare worker bridge."
+}

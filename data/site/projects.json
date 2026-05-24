@@ -80,5 +80,26 @@
       "demo": "",
       "writeup": ""
     }
+  },
+  {
+    "idx": 12,
+    "slug": "evergreenlabs-bot",
+    "title": "evergreenlabs-bot",
+    "blurb": "watches github repos and uses a local llm to draft log entries from commits. syncs metadata to the evergreenlabs website.",
+    "longBlurb": "",
+    "writeup": "",
+    "tags": [
+      "PYTHON"
+    ],
+    "meta": "updated may 2026",
+    "stack": "Python",
+    "status": "active",
+    "featured": false,
+    "screenshot": "",
+    "links": {
+      "repo": "https://github.com/SirWhack/evergreenlabs-bot",
+      "demo": "",
+      "writeup": ""
+    }
   }
 ]
