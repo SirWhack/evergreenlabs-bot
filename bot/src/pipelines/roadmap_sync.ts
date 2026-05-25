@@ -360,9 +360,7 @@ export async function runRoadmapSync(
           kind,
           body,
         }), { temperature: 0.3, maxTokens: 160 });
-        commentary = result.text.trim()
-          .replace(/^```(?:html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "")
-          .replace(/^"|"$/g, "").trim();
+        commentary = result.text.trim();
       } catch (err) {
         console.error(`[roadmap_sync] commentary failed for ${node.id}: ${err}`);
         commentary = "";

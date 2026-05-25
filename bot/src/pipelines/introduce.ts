@@ -11,6 +11,7 @@
 
 import { fetchReadme, listPublicRepos, type GhAppEnv, type GhRepo } from "../lib/github";
 import { chat, type LlmEnv } from "../lib/llm";
+import { metaString, normalizeTags, SKIP_NAMES } from "../lib/site-conventions";
 import {
   getSitePart,
   insertDraft,
@@ -19,9 +20,6 @@ import {
   putSitePart,
 } from "../lib/state";
 import type { ProjectEntry } from "./project_sync";
-
-/** Repos hardcoded to skip — matches Python `SKIP_NAMES`. */
-const SKIP_NAMES = new Set<string>(["evergreenlabs"]);
 
 // ---------------------------------------------------------------------------
 // Prompts — ported verbatim from Python introduce.py
@@ -82,28 +80,6 @@ function readmeExcerpt(text: string | null, n = 400): string {
   return body.length > n ? body.slice(0, n) + "…" : body;
 }
 
-/** First 4 topics uppercased, dashes to spaces. Falls back to language. */
-function normalizeTags(repo: GhRepo): string[] {
-  const out = repo.topics.slice(0, 4).map((t) => t.toUpperCase().replace(/-/g, " "));
-  if (out.length === 0 && repo.language) {
-    return [repo.language.toUpperCase()];
-  }
-  return out;
-}
-
-const MONTHS = [
-  "jan", "feb", "mar", "apr", "may", "jun",
-  "jul", "aug", "sep", "oct", "nov", "dec",
-];
-
-/** "updated <mon> <year>" lowercase. */
-function metaString(pushedAtIso: string): string {
-  const d = new Date(pushedAtIso);
-  const month = MONTHS[d.getUTCMonth()];
-  const year = d.getUTCFullYear();
-  return `updated ${month} ${year}`;
-}
-
 /** Call the LLM to draft a blurb. Returns empty string on failure. */
 async function draftBlurb(
   env: LlmEnv,
@@ -122,9 +98,7 @@ async function draftBlurb(
       maxTokens: 200,
     });
     // Strip surrounding quotes the model sometimes adds
-    return result.text.trim()
-      .replace(/^```(?:html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "")
-      .replace(/^"+|"+$/g, "").trim();
+    return result.text.trim();
   } catch {
     return "";
   }
@@ -226,7 +200,7 @@ async function introduceOne(
     blurb,
     longBlurb: "",
     writeup: "",
-    tags: normalizeTags(repo),
+    tags: normalizeTags(repo.topics, repo.language),
     meta: metaString(repo.pushed_at),
     stack: repo.language || "",
     status: "active",

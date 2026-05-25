@@ -8,11 +8,14 @@
     "tail": "wrangler tail",
     "migrate:local": "wrangler d1 execute evergreenlabs-bot --local --file migrations/0001_init.sql && wrangler d1 execute evergreenlabs-bot --local --file migrations/0002_pending_events.sql",
     "migrate:remote": "wrangler d1 execute evergreenlabs-bot --remote --file migrations/0001_init.sql && wrangler d1 execute evergreenlabs-bot --remote --file migrations/0002_pending_events.sql",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
     "typescript": "^5.5.0",
+    "vitest": "^4.1.7",
     "wrangler": "^4.0.0"
   }
 }

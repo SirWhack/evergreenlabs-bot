@@ -17,6 +17,7 @@
 
 import type { CommitDetail } from "../lib/github";
 import { chat, chatJson, type LlmEnv } from "../lib/llm";
+import { shortDate } from "../lib/site-conventions";
 
 const JUDGE_SYSTEM = `You are filtering a developer's git commits for inclusion in a public dev log.
 The log voice is terse, specific, often self-deprecating: it records what was
@@ -41,11 +42,6 @@ const DRAFT_SYSTEM = `You write entries for a developer's public dev log. Voice 
 Output ONLY the HTML body — no surrounding tags, no leading "Today I…",
 no explanations.
 `;
-
-const MONTHS = [
-  "jan", "feb", "mar", "apr", "may", "jun",
-  "jul", "aug", "sep", "oct", "nov", "dec",
-];
 
 export interface LogEntryPayload {
   date: string; // e.g. "may 24"
@@ -79,23 +75,13 @@ export interface LogDrafterResult {
   errored: number;
 }
 
-function formatFiles(files: string[]): string {
+export function formatFiles(files: string[]): string {
   if (!files.length) return "(none)";
   if (files.length <= 6) return files.join(", ");
   return files.slice(0, 6).join(", ") + `, … (+${files.length - 6} more)`;
 }
 
-function shortDate(iso: string): { date: string; year: string } {
-  const d = new Date(iso);
-  // UTC formatting — the Python original uses local; for a cloud-deployed bot
-  // UTC is the only stable choice. Reader-visible difference is at most one
-  // day on a commit landing near midnight.
-  const month = MONTHS[d.getUTCMonth()];
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return { date: `${month} ${day}`, year: String(d.getUTCFullYear()) };
-}
-
-function projectSlugForRepo(
+export function projectSlugForRepo(
   repoName: string,
   projects: Array<{ slug?: string }>,
 ): string | null {
@@ -149,9 +135,7 @@ async function draftBody(
     temperature: 0.5,
     maxTokens: 300,
   });
-  let text = result.text.trim();
-  text = text.replace(/^```(?:html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-  return text;
+  return result.text;
 }
 
 /**

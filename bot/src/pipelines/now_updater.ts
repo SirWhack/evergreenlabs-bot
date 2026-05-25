@@ -9,6 +9,7 @@
 // overwrite site_parts.now.
 
 import { chat, type LlmEnv } from "../lib/llm";
+import { currentWeekOf } from "../lib/site-conventions";
 import { getSitePart, insertDraft, putSitePart } from "../lib/state";
 
 // ---------------------------------------------------------------------------
@@ -67,19 +68,6 @@ export interface NowUpdaterResult {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const MONTHS = [
-  "jan", "feb", "mar", "apr", "may", "jun",
-  "jul", "aug", "sep", "oct", "nov", "dec",
-];
-
-/** Format current UTC date as "mon dd" lowercase — e.g. "may 24". */
-function currentWeekOf(): string {
-  const now = new Date();
-  const month = MONTHS[now.getUTCMonth()];
-  const day = String(now.getUTCDate()).padStart(2, "0");
-  return `${month} ${day}`;
-}
-
 // ---------------------------------------------------------------------------
 // Main pipeline
 // ---------------------------------------------------------------------------
@@ -121,9 +109,7 @@ export async function updateNow(env: NowUpdaterEnv): Promise<NowUpdaterResult | 
       temperature: 0.5,
       maxTokens: 200,
     });
-    text = result.text.trim();
-    // Strip markdown code fences if the model wraps the output
-    text = text.replace(/^```(?:html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    text = result.text;
   } catch (e: any) {
     // LLM failure — cannot draft. Bail out silently rather than crashing
     // the Workflow. Operator sees it in console logs.

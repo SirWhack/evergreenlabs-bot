@@ -28,6 +28,7 @@ import {
   type WorkflowStep,
 } from "cloudflare:workers";
 
+import { extractUniqueCommits, type DrainedCommit } from "../lib/commits";
 import { fetchCommitDetail, type CommitDetail, type GhAppEnv } from "../lib/github";
 import { publishSiteData } from "../lib/publish";
 import {
@@ -36,7 +37,6 @@ import {
   insertDraft,
   putSitePart,
   setCursor,
-  type PendingEvent,
 } from "../lib/state";
 import { draftLogEntries, type LogDraft } from "../pipelines/log_drafter";
 import { introduceRepo } from "../pipelines/introduce";
@@ -63,12 +63,6 @@ export interface PerRepoParams {
   repo?: string; // full_name, e.g. "SirWhack/foo"
   delivery_id?: string;
   event?: string;
-}
-
-interface DrainedCommit {
-  sha: string;
-  repoFullName: string;
-  repoShortName: string;
 }
 
 export class PerRepoUpdate extends WorkflowEntrypoint<PerRepoEnv, PerRepoParams> {
@@ -232,31 +226,4 @@ export class PerRepoUpdate extends WorkflowEntrypoint<PerRepoEnv, PerRepoParams>
 function shortName(full: string): string {
   const slash = full.indexOf("/");
   return slash < 0 ? full : full.slice(slash + 1);
-}
-
-/**
- * Walk drained pending events, pull push payloads' commits[] arrays out,
- * and return a unique-by-SHA list in original push order. Non-push events
- * (create, repository, etc.) are silently ignored — Slice 2 only handles
- * log_drafter; future slices will inspect `event` here for introduce, etc.
- */
-function extractUniqueCommits(
-  pendingEvents: PendingEvent[],
-  repoFullName: string,
-  repoShortName: string,
-): DrainedCommit[] {
-  const seen = new Set<string>();
-  const out: DrainedCommit[] = [];
-  for (const ev of pendingEvents) {
-    if (ev.event !== "push") continue;
-    const payload = ev.payload as { commits?: Array<{ id?: string }> } | null | undefined;
-    const commits = payload?.commits ?? [];
-    for (const c of commits) {
-      const sha = c?.id;
-      if (!sha || seen.has(sha)) continue;
-      seen.add(sha);
-      out.push({ sha, repoFullName, repoShortName });
-    }
-  }
-  return out;
 }

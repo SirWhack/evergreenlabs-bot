@@ -21,10 +21,8 @@
 // Workflow) is responsible for `publishSiteData({ projects }, ...)`.
 
 import { listPublicRepos, type GhAppEnv, type GhRepo } from "../lib/github";
+import { metaString, normalizeTags, SKIP_NAMES } from "../lib/site-conventions";
 import { getSitePart, isSkipped, putSitePart } from "../lib/state";
-
-/** Repos hardcoded to skip — matches Python `SKIP_NAMES`. */
-const SKIP_NAMES = new Set<string>(["evergreenlabs"]);
 
 /** Result counters mirroring the Python `summary` dict. */
 export interface ProjectSyncSummary {
@@ -67,25 +65,6 @@ export interface ProjectEntry {
 interface ProjectSyncEnv extends GhAppEnv {
   DB: D1Database;
   GITHUB_USERNAME: string;
-}
-
-const MONTHS = [
-  "jan", "feb", "mar", "apr", "may", "jun",
-  "jul", "aug", "sep", "oct", "nov", "dec",
-];
-
-/** "updated <mon> <year>" lowercase. Mirrors Python `_meta_string`. */
-function metaString(pushedAtIso: string): string {
-  const d = new Date(pushedAtIso);
-  // Use UTC to match Python's tz-aware datetime (pushed_at is UTC).
-  const month = MONTHS[d.getUTCMonth()];
-  const year = d.getUTCFullYear();
-  return `updated ${month} ${year}`;
-}
-
-/** First 4 topics, uppercased, dashes -> spaces. Mirrors Python `_normalize_topics`. */
-function normalizeTopics(topics: readonly string[]): string[] {
-  return topics.slice(0, 4).map((t) => t.toUpperCase().replace(/-/g, " "));
 }
 
 function shortBlurb(description: string | null): string {
@@ -186,9 +165,9 @@ function applyRepoMetadata(entry: ProjectEntry, repo: GhRepo): void {
 
   entry.meta = metaString(repo.pushed_at);
 
-  const topics = normalizeTopics(repo.topics);
-  if (topics.length > 0) {
-    entry.tags = topics;
+  const tags = normalizeTags(repo.topics, null);
+  if (tags.length > 0) {
+    entry.tags = tags;
   }
 
   const currentStack = typeof entry.stack === "string" ? entry.stack.trim() : "";

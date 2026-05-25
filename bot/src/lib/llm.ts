@@ -36,6 +36,19 @@ export function defaultModel(env: LlmEnv): string {
  * Raises if the provider returned empty content (usually finish_reason="length"
  * on a too-small max_tokens budget).
  */
+/**
+ * Strip markdown code fences and surrounding quotes that models sometimes
+ * wrap around output. Every pipeline needs clean text; none wants fences.
+ */
+export function stripFences(raw: string): string {
+  let text = raw.trim();
+  if (text.startsWith("```")) {
+    text = text.replace(/^```[a-z]*\s*\n?/i, "").replace(/\n?```\s*$/i, "");
+  }
+  text = text.replace(/^"+|"+$/g, "").trim();
+  return text;
+}
+
 export async function chat(
   env: LlmEnv,
   system: string,
@@ -75,15 +88,15 @@ export async function chat(
     model?: string;
   };
   const choice = data.choices?.[0];
-  const text = (choice?.message?.content ?? "").trim();
+  const rawText = (choice?.message?.content ?? "").trim();
   const finishReason = choice?.finish_reason ?? null;
-  if (!text) {
+  if (!rawText) {
     throw new Error(
       `LLM returned empty content (finish_reason=${finishReason}). ` +
         `If finish_reason is 'length', raise maxTokens; if 'stop', the model refused.`,
     );
   }
-  return { text, model: data.model ?? model, finishReason };
+  return { text: stripFences(rawText), model: data.model ?? model, finishReason };
 }
 
 /**
@@ -106,13 +119,7 @@ export async function chatJson<T = Record<string, unknown>>(
       temperature: opts.temperature ?? 0.2,
     },
   );
-  let text = result.text.trim();
-  if (text.startsWith("```")) {
-    text = text.replace(/^`+/, "").replace(/`+$/, "");
-    if (text.toLowerCase().startsWith("json")) {
-      text = text.slice(4).replace(/^\n/, "");
-    }
-  }
+  const text = result.text;
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start === -1 || end === -1 || end < start) {
