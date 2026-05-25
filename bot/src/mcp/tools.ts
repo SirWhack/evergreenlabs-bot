@@ -24,7 +24,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "get_repo_context",
     description:
-      "Everything the bot knows about a repo: project entry, board items, recent logs, draft status, skip status. Call this when starting work in any repo. Pass full owner/repo from git remote.",
+      "Everything the portfolio bot knows about a repo: project card, board items, recent log entries, draft status, skip status. Call this when starting work in any repo to orient yourself. Pass full owner/repo from git remote.",
     inputSchema: {
       type: "object",
       properties: {
@@ -39,13 +39,13 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "get_site_status",
     description:
-      "Portfolio bot overview: project count, pending drafts, last sync, board items by status. Use to check health or get the high-level picture.",
+      "Overview of the portfolio automation bot: project count, pending drafts, last sync time, board items by status.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "list_items",
     description:
-      "Query the GitHub Projects v2 board. Returns items with status, priority, kind. Filter by repo or status.",
+      "Query the personal project board (GitHub Projects v2). This board tracks work across all of the user's repos — features, bugs, chores. Filter by repo or status to scope results.",
     inputSchema: {
       type: "object",
       properties: {
@@ -55,7 +55,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
         },
         status: {
           type: "string",
-          description: "Filter by status (e.g. In Progress, Todo)",
+          description: "Filter by status (e.g. In Progress, Todo, Backlog)",
         },
       },
     },
@@ -63,21 +63,29 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "create_item",
     description:
-      "Add a draft item to the project board. Sets repo field automatically if provided.",
+      "Add an item to the user's personal project board. This board tracks work across all repos — it is published to the user's portfolio website as a public roadmap. Keep titles short and descriptive (e.g. 'Add temporal tracking to graph'). Always pass repo with the owner/repo of the repo you are working in. Always pass status.",
     inputSchema: {
       type: "object",
       properties: {
-        title: { type: "string", description: "Item title" },
+        title: {
+          type: "string",
+          description:
+            "Short, clear task title. Write it like a roadmap item a stranger would understand, not an implementation note.",
+        },
         status: {
           type: "string",
-          description: "Board status (e.g. Todo, In Progress, Backlog)",
+          description: "Board status: Todo, In Progress, Backlog, or Done",
         },
         priority: { type: "string", description: "Priority level" },
         kind: {
           type: "string",
           description: "Item type (e.g. Bug, Feature, Chore)",
         },
-        repo: { type: "string", description: "Repo to associate" },
+        repo: {
+          type: "string",
+          description:
+            "The owner/repo this item belongs to. Always set this to the repo you are working in.",
+        },
       },
       required: ["title"],
     },
@@ -85,12 +93,15 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "update_item",
     description:
-      "Update fields on an existing board item. Pass item_id from list_items or create_item.",
+      "Update fields on an existing board item. Get item_id from list_items or create_item first.",
     inputSchema: {
       type: "object",
       properties: {
         item_id: { type: "string", description: "Board item node ID" },
-        status: { type: "string", description: "New status" },
+        status: {
+          type: "string",
+          description: "New status: Todo, In Progress, Backlog, or Done",
+        },
         priority: { type: "string", description: "New priority" },
         kind: { type: "string", description: "New kind/type" },
       },
@@ -99,7 +110,8 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   },
   {
     name: "close_item",
-    description: "Archive a board item. Use when work is complete.",
+    description:
+      "Archive a board item (marks it done and removes from active view). Use when work is complete.",
     inputSchema: {
       type: "object",
       properties: {
@@ -111,13 +123,13 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "trigger_daily_sync",
     description:
-      "Run the full sync: refresh projects, discover new repos, sync roadmap from board, publish to site. Use after board changes to update the site immediately.",
+      "Run the full portfolio sync: refresh project metadata, discover new repos, sync roadmap from board, publish to site. Use after board changes to update the portfolio site immediately.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "trigger_repo_sync",
     description:
-      "Process pending webhook events for a repo: draft log entries from recent commits, update now text, publish. Use to flush backed-up events.",
+      "Process pending webhook events for a repo: draft log entries from recent commits, update now text, publish to the portfolio site.",
     inputSchema: {
       type: "object",
       properties: {

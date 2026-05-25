@@ -354,11 +354,16 @@ export async function listBoardItems(
     const content = node.content ?? ({} as Partial<ItemContentNode>);
     const fields = extractFieldValues(node.fieldValues?.nodes ?? []);
     const status = pickField(fields, "status", "state") ?? "Untriaged";
-    const repo = content.repository?.nameWithOwner ?? null;
+    const repo =
+      content.repository?.nameWithOwner ??
+      pickField(fields, "repo", "repository") ??
+      null;
 
     if (repoFilter) {
       const match =
-        repo === repoFilter || repo?.endsWith(`/${repoFilter}`);
+        repo === repoFilter ||
+        repo?.endsWith(`/${repoFilter}`) ||
+        repo?.toLowerCase() === repoFilter.toLowerCase();
       if (!match) continue;
     }
     if (statusFilter && status.toLowerCase() !== statusFilter.toLowerCase()) {
