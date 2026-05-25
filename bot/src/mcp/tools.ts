@@ -7,6 +7,7 @@ import {
   updateItemField,
   archiveItem,
   listBoardItems,
+  getProjectSchema,
 } from "./board";
 
 interface ToolDef {
@@ -43,6 +44,12 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     inputSchema: { type: "object", properties: {} },
   },
   {
+    name: "get_board_schema",
+    description:
+      "Returns the project board's field definitions: every field name, type, and valid options. Call this before create_item or update_item to know which statuses, priorities, and kinds are available. Cached for 5 minutes.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
     name: "list_items",
     description:
       "Query the personal project board (GitHub Projects v2). This board tracks work across all of the user's repos — features, bugs, chores. Filter by repo or status to scope results.",
@@ -63,7 +70,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "create_item",
     description:
-      "Add an item to the user's personal project board. This board tracks work across all repos — it is published to the user's portfolio website as a public roadmap. Keep titles short and descriptive (e.g. 'Add temporal tracking to graph'). Always pass repo with the owner/repo of the repo you are working in. Always pass status.",
+      "Add an item to the user's personal project board. This board tracks work across all repos — it is published to the user's portfolio website as a public roadmap. Keep titles short and descriptive (e.g. 'Add temporal tracking to graph'). Always pass repo with the owner/repo of the repo you are working in. Always pass status. Call get_board_schema first if you need valid field values.",
     inputSchema: {
       type: "object",
       properties: {
@@ -74,7 +81,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
         },
         status: {
           type: "string",
-          description: "Board status: Todo, In Progress, Backlog, or Done",
+          description: "Board status — call get_board_schema for valid values",
         },
         priority: { type: "string", description: "Priority level" },
         kind: {
@@ -100,7 +107,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
         item_id: { type: "string", description: "Board item node ID" },
         status: {
           type: "string",
-          description: "New status: Todo, In Progress, Backlog, or Done",
+          description: "New status — call get_board_schema for valid values",
         },
         priority: { type: "string", description: "New priority" },
         kind: { type: "string", description: "New kind/type" },
@@ -243,6 +250,28 @@ async function getRepoContext(
       2,
     ),
   );
+}
+
+async function handleGetBoardSchema(env: Env): Promise<ToolResult> {
+  try {
+    const schema = await getProjectSchema(env);
+    const fields: Array<Record<string, unknown>> = [];
+    for (const [, def] of schema.fields) {
+      const field: Record<string, unknown> = {
+        name: def.name,
+        type: def.type,
+      };
+      if (def.options) {
+        field.options = [...def.options.keys()];
+      }
+      fields.push(field);
+    }
+    return textResult(JSON.stringify({ projectId: schema.projectId, fields }, null, 2));
+  } catch (err) {
+    return errorResult(
+      `Failed to fetch schema: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 async function getSiteStatus(env: Env): Promise<ToolResult> {
@@ -446,6 +475,8 @@ export async function executeTool(
       return getRepoContext(env, args);
     case "get_site_status":
       return getSiteStatus(env);
+    case "get_board_schema":
+      return handleGetBoardSchema(env);
     case "list_items":
       return handleListItems(env, args);
     case "create_item":
