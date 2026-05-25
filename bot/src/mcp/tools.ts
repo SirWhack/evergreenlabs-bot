@@ -158,7 +158,7 @@ const FIELD_CANDIDATES: Record<string, string[]> = {
   status: ["Status"],
   priority: ["Priority"],
   kind: ["Type", "Kind", "Category"],
-  repo: ["Repo", "Repository"],
+  repo: ["Repository", "Repo"],
 };
 
 async function setFieldWithFallbacks(
