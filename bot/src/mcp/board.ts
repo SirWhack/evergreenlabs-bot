@@ -147,17 +147,17 @@ export async function createDraftItem(
 ): Promise<string> {
   const schema = await getProjectSchema(env);
   const data = await patGraphQL<{
-    addProjectV2DraftItem: { projectV2Item: { id: string } };
+    addProjectV2DraftIssue: { projectItem: { id: string } };
   }>(
     env,
     `mutation($projectId: ID!, $title: String!) {
-      addProjectV2DraftItem(input: { projectId: $projectId, title: $title }) {
-        projectV2Item { id }
+      addProjectV2DraftIssue(input: { projectId: $projectId, title: $title }) {
+        projectItem { id }
       }
     }`,
     { projectId: schema.projectId, title },
   );
-  return data.addProjectV2DraftItem.projectV2Item.id;
+  return data.addProjectV2DraftIssue.projectItem.id;
 }
 
 export async function updateItemField(
