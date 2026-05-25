@@ -15,7 +15,11 @@ This project is being rewritten from a local Python CLI to a fully cloud-native 
 ```
 bot/
   src/
-    index.ts            # Worker entrypoint: webhook intake, HTTP trigger endpoints
+    index.ts            # Worker entrypoint: webhook intake, HTTP trigger, MCP server
+    mcp/
+      handler.ts        # MCP Streamable HTTP handler (JSON-RPC dispatch)
+      tools.ts          # MCP tool definitions + execution handlers
+      board.ts          # GitHub Projects v2 GraphQL mutations + schema cache
     workflows/
       per-repo.ts       # singleton-per-repo Workflow (push, repository.created)
       daily-sync.ts     # cron + manual trigger Workflow
@@ -44,7 +48,9 @@ data/site/              # legacy Python canonical state — informational only p
 
 **Workflows over Workers for multi-step work:** Anything that fetches GH data, calls an LLM, and writes results belongs in a Workflow step, not a bare Worker handler. Workflows give you durable execution and per-step retries.
 
-**Secrets:** Set with `wrangler secret put NAME`. Never commit secrets. The `.env` file is local-only and gitignored. Required secrets: `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `OPENROUTER_API_KEY`, `TRIGGER_TOKEN` (replaces the old `BOT_POLL_TOKEN`).
+**Secrets:** Set with `wrangler secret put NAME`. Never commit secrets. The `.env` file is local-only and gitignored. Required secrets: `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `OPENROUTER_API_KEY`, `TRIGGER_TOKEN`, `MCP_TOKEN`, `GITHUB_PAT_PROJECTS`.
+
+**MCP server:** The Worker exposes an MCP endpoint at `/mcp` (ADR-0002). It provides board management tools (CRUD on GitHub Projects v2) and read-only context queries (repo info, site status). Auth is bearer token via `MCP_TOKEN`. The MCP server does NOT write site content — the bot's pipelines are the sole authority. See `bot/src/mcp/` for implementation.
 
 **Webhook trigger model:** GitHub webhook → Worker (`/gh/webhook`) verifies signature + delivery-id dedup in D1 → `WORKFLOW.create({ id: repo-name })`. Singleton-per-repo instance debounces ~30s to coalesce bursts. Do not reintroduce a queue.
 
@@ -60,6 +66,10 @@ wrangler d1 execute evergreenlabs-bot --local --command "SELECT * FROM drafts"
 wrangler deploy                               # deploy to CF
 wrangler secret put OPENROUTER_API_KEY        # interactive secret entry
 curl -X POST https://<worker>/trigger/daily-sync -H "Authorization: Bearer $TRIGGER_TOKEN"
+
+# MCP server — connect from Claude Code
+wrangler secret put MCP_TOKEN                 # set the MCP bearer token
+claude mcp add --transport http evergreenlabs-bot https://<worker>/mcp --header "Authorization: Bearer $MCP_TOKEN"
 ```
 
 ## Anti-patterns
@@ -70,6 +80,7 @@ curl -X POST https://<worker>/trigger/daily-sync -H "Authorization: Bearer $TRIG
 - Don't shell out to `git`; use Contents API.
 - Don't use SQLite/local FS; use D1.
 - Don't add a new top-level config format — use `wrangler.toml` `[vars]` for non-secret config, `wrangler secret` for secrets.
+- Don't add MCP tools that write to `site_parts` or `drafts` — the bot's pipelines are the sole writer for site content (ADR-0002 §D1).
 
 ## When in doubt
 

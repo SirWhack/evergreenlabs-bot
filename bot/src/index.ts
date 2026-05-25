@@ -5,6 +5,7 @@
 import { verifyGitHubSignature } from "./lib/verify";
 import { shouldEnqueue } from "./lib/filter";
 import { enqueuePendingEvent, seenDelivery } from "./lib/state";
+import { handleMcp } from "./mcp/handler";
 
 // Re-exports so wrangler can register the Workflow classes against this
 // Worker script (see [[workflows]] bindings in wrangler.toml).
@@ -23,6 +24,8 @@ export interface Env {
   GITHUB_APP_PRIVATE_KEY: string;
   OPENROUTER_API_KEY: string;
   TRIGGER_TOKEN: string;
+  MCP_TOKEN: string;
+  GITHUB_PAT_PROJECTS: string;
 
   // Vars
   GITHUB_USERNAME: string;
@@ -30,6 +33,7 @@ export interface Env {
   WEBSITE_REPO_NAME: string;
   SITE_DATA_PATH: string;
   LLM_MODEL: string;
+  GITHUB_PROJECT_NUMBER: string;
 }
 
 export default {
@@ -44,6 +48,12 @@ export default {
     }
     if (req.method === "POST" && url.pathname === "/trigger/daily-sync") {
       return handleManualDailySync(req, env);
+    }
+    if (url.pathname === "/mcp") {
+      if (!bearerOk(req, env.MCP_TOKEN)) {
+        return new Response("unauthorized", { status: 401 });
+      }
+      return handleMcp(req, env);
     }
     return new Response("not found", { status: 404 });
   },
