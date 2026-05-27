@@ -10,10 +10,12 @@
     "migrate:remote": "wrangler d1 execute evergreenlabs-bot --remote --file migrations/0001_init.sql && wrangler d1 execute evergreenlabs-bot --remote --file migrations/0002_pending_events.sql",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval": "tsx scripts/eval-voices.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
+    "tsx": "^4.22.3",
     "typescript": "^5.5.0",
     "vitest": "^4.1.7",
     "wrangler": "^4.0.0"

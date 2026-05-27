@@ -13,15 +13,12 @@ import { currentWeekOf } from "../lib/site-conventions";
 import { getSitePart, insertDraft, putSitePart } from "../lib/state";
 
 // ---------------------------------------------------------------------------
-// Prompts — verbatim from Python now_updater.py
+// Prompts
 // ---------------------------------------------------------------------------
 
-const SYSTEM = `You are drafting a one-line "what I'm working on this week" status for a
-developer's public site. Voice: terse, specific, present-tense, lowercase.
-Mentions a project by name with <b>bold</b>. Optionally adds one sentence about
-the current obstacle. No hype words. 1-2 sentences total, < 240 chars.
+import { getVoice } from "../lib/voices";
 
-Output only the HTML body. No prose around it.`;
+const SYSTEM = getVoice("now", "chill");
 
 const LOG_USER_TEMPLATE = `The user just accepted a log entry. Forward-rephrase it as a "currently
 working on" status — same project, present tense, looking ahead at the next

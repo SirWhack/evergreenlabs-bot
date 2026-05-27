@@ -22,20 +22,12 @@ import {
 import type { ProjectEntry } from "./project_sync";
 
 // ---------------------------------------------------------------------------
-// Prompts — ported verbatim from Python introduce.py
+// Prompts
 // ---------------------------------------------------------------------------
 
-const BLURB_SYSTEM = `\
-You write one-sentence project blurbs for a developer's personal site.
-Voice: lowercase, terse, specific. Mentions what the project does, not why.
-No hype words (powerful, robust, excited). No first-person.
+import { getVoice } from "../lib/voices";
 
-Examples of the voice:
-- "Extracts structured markdown from academic and legal PDFs. Multi-column reading order, tables, footnotes, citations."
-- "A single-page DM screen for D&D 5e — initiative, conditions, concentration, monster lookup. Works offline."
-
-Output ONLY the blurb. No quotes, no prose around it.
-If the inputs are too thin to write something honest, output an empty string.`;
+const BLURB_SYSTEM = getVoice("blurb", "chill");
 
 const BLURB_USER_TEMPLATE = `\
 Repo: {name}

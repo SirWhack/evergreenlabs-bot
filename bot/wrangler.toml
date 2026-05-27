@@ -9,8 +9,8 @@ compatibility_flags = ["nodejs_compat"]
 # ---------------------------------------------------------------------------
 # Non-secret config. Secrets (GITHUB_WEBHOOK_SECRET, GITHUB_APP_PRIVATE_KEY,
 # GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, OPENROUTER_API_KEY, TRIGGER_TOKEN,
-# MCP_TOKEN, GITHUB_PAT_PROJECTS) are set via `wrangler secret put` and never
-# live in this file.
+# MCP_TOKEN, GITHUB_PAT_PROJECTS, DIFFUSION_KEY) are set via `wrangler secret put`
+# and never live in this file.
 # ---------------------------------------------------------------------------
 [vars]
 GITHUB_USERNAME      = "SirWhack"

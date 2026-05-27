@@ -8,10 +8,12 @@
 // to pull the openai npm package into the Worker bundle.
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const INCEPTION_URL = "https://api.inceptionlabs.ai/v1/chat/completions";
 
 export interface LlmEnv {
   OPENROUTER_API_KEY: string;
   LLM_MODEL?: string;
+  DIFFUSION_KEY?: string;
 }
 
 export interface ChatOpts {
@@ -49,6 +51,18 @@ export function stripFences(raw: string): string {
   return text;
 }
 
+function isInceptionModel(model: string): boolean {
+  return model.startsWith("mercury-");
+}
+
+function resolveProvider(env: LlmEnv, model: string): { url: string; apiKey: string; providerName: string } {
+  if (isInceptionModel(model)) {
+    if (!env.DIFFUSION_KEY) throw new Error("DIFFUSION_KEY not set — required for mercury models");
+    return { url: INCEPTION_URL, apiKey: env.DIFFUSION_KEY, providerName: "Inception" };
+  }
+  return { url: OPENROUTER_URL, apiKey: env.OPENROUTER_API_KEY, providerName: "OpenRouter" };
+}
+
 export async function chat(
   env: LlmEnv,
   system: string,
@@ -56,6 +70,7 @@ export async function chat(
   opts: ChatOpts = {},
 ): Promise<ChatResult> {
   const model = opts.model ?? defaultModel(env);
+  const { url, apiKey, providerName } = resolveProvider(env, model);
   const body = {
     model,
     messages: [
@@ -65,20 +80,22 @@ export async function chat(
     temperature: opts.temperature ?? 0.4,
     max_tokens: opts.maxTokens ?? 600,
   };
-  const res = await fetch(OPENROUTER_URL, {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+  if (providerName === "OpenRouter") {
+    headers["HTTP-Referer"] = "https://github.com/SirWhack/evergreenlabs-bot";
+    headers["X-Title"] = "evergreenlabs-bot";
+  }
+  const res = await fetch(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      // OpenRouter encourages these for attribution/leaderboards; harmless.
-      "HTTP-Referer": "https://github.com/SirWhack/evergreenlabs-bot",
-      "X-Title": "evergreenlabs-bot",
-    },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const errBody = await res.text();
-    throw new Error(`OpenRouter ${res.status}: ${errBody.slice(0, 400)}`);
+    throw new Error(`${providerName} ${res.status}: ${errBody.slice(0, 400)}`);
   }
   const data = (await res.json()) as {
     choices?: Array<{
