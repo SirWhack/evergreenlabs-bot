@@ -3,7 +3,7 @@ export const MONTHS = [
   "jul", "aug", "sep", "oct", "nov", "dec",
 ];
 
-export const SKIP_NAMES = new Set<string>(["evergreenlabs"]);
+export const SKIP_NAMES = new Set<string>([]);
 
 export function metaString(pushedAtIso: string): string {
   const d = new Date(pushedAtIso);

@@ -160,6 +160,52 @@ export async function createDraftItem(
   return data.addProjectV2DraftIssue.projectItem.id;
 }
 
+export interface IssueItemEnv extends BoardEnv {
+  GITHUB_APP_ID: string;
+  GITHUB_APP_INSTALLATION_ID: string;
+  GITHUB_APP_PRIVATE_KEY: string;
+}
+
+export async function createIssueAndAddToBoard(
+  env: IssueItemEnv,
+  repo: string,
+  title: string,
+  body?: string,
+): Promise<{ itemId: string; issueUrl: string; issueNodeId: string }> {
+  const { ghFetch } = await import("../lib/github");
+
+  const res = await ghFetch(env, `/repos/${repo}/issues`, {
+    method: "POST",
+    body: JSON.stringify({ title, body: body ?? "" }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create issue in ${repo}: ${res.status} ${await res.text()}`);
+  }
+  const issue = (await res.json()) as {
+    node_id: string;
+    html_url: string;
+  };
+
+  const schema = await getProjectSchema(env);
+  const data = await patGraphQL<{
+    addProjectV2ItemById: { item: { id: string } };
+  }>(
+    env,
+    `mutation($projectId: ID!, $contentId: ID!) {
+      addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+        item { id }
+      }
+    }`,
+    { projectId: schema.projectId, contentId: issue.node_id },
+  );
+
+  return {
+    itemId: data.addProjectV2ItemById.item.id,
+    issueUrl: issue.html_url,
+    issueNodeId: issue.node_id,
+  };
+}
+
 export async function updateItemField(
   env: BoardEnv,
   itemId: string,

@@ -4,6 +4,7 @@ import type { Env } from "../index";
 import { getSitePart } from "../lib/state";
 import {
   createDraftItem,
+  createIssueAndAddToBoard,
   updateItemField,
   archiveItem,
   listBoardItems,
@@ -70,7 +71,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "create_item",
     description:
-      "Add an item to the user's personal project board. This board tracks work across all repos — it is published to the user's portfolio website as a public roadmap. Keep titles short and descriptive (e.g. 'Add temporal tracking to graph'). Always pass repo with the owner/repo of the repo you are working in. Always pass status. Call get_board_schema first if you need valid field values.",
+      "Add an item to the user's personal project board. When repo is provided, creates a real GitHub issue in that repo and adds it to the board (giving it a URL and repo link). Without repo, creates a draft. Keep titles short and descriptive (e.g. 'Add temporal tracking to graph'). Always pass repo with the owner/repo of the repo you are working in. Always pass status. Call get_board_schema first if you need valid field values.",
     inputSchema: {
       type: "object",
       properties: {
@@ -344,12 +345,24 @@ async function handleCreateItem(
   const title = String(args.title ?? "");
   if (!title) return errorResult("title is required");
 
+  const repo = args.repo ? String(args.repo) : null;
+
   try {
-    const itemId = await createDraftItem(env, title);
+    let itemId: string;
+    let issueUrl: string | null = null;
+
+    if (repo) {
+      const result = await createIssueAndAddToBoard(env, repo, title);
+      itemId = result.itemId;
+      issueUrl = result.issueUrl;
+    } else {
+      itemId = await createDraftItem(env, title);
+    }
+
     const fieldsSet: string[] = [];
     const fieldErrors: string[] = [];
 
-    for (const argName of ["status", "priority", "kind", "repo"] as const) {
+    for (const argName of ["status", "priority", "kind"] as const) {
       if (!args[argName]) continue;
       const err = await setFieldWithFallbacks(
         env,
@@ -365,6 +378,8 @@ async function handleCreateItem(
       JSON.stringify({
         itemId,
         title,
+        ...(issueUrl ? { issueUrl } : {}),
+        ...(repo ? { repo } : {}),
         fieldsSet,
         ...(fieldErrors.length ? { fieldErrors } : {}),
       }),

@@ -118,16 +118,12 @@ query($login: String!, $number: Int!) {
 `;
 
 // ---------------------------------------------------------------------------
-// Prompts — ported verbatim from Python
+// Prompts
 // ---------------------------------------------------------------------------
 
-const COMMENTARY_SYSTEM = `\
-You write one-line context blurbs for items on a developer's public roadmap.
-Voice: terse, lowercase, specific. NO hype words (powerful, robust, exciting).
-NO meta phrases ("this card", "this item"). State what the change does and the
-shape of the work, nothing more. 1 short sentence, < 140 chars.
+import { getVoice } from "../lib/voices";
 
-Output ONLY the sentence. If the inputs are too thin, output an empty string.`;
+const COMMENTARY_SYSTEM = getVoice("roadmap", "chill");
 
 function commentaryUserPrompt(item: {
   title: string;
@@ -337,7 +333,9 @@ export async function runRoadmapSync(
     const title = content.title ?? "(untitled)";
     const body = (content.body ?? "").trim();
     const url = content.url ?? null;
-    const repo = content.repository?.nameWithOwner ?? null;
+    const repo = content.repository?.nameWithOwner
+      ?? pick(fields, "Repo", "Repository")
+      ?? null;
     const priority = pick(fields, "Priority");
     const kind = pick(fields, "Type", "Kind", "Category");
     // Normalize updatedAt to UTC ISO string (replace trailing Z with +00:00
