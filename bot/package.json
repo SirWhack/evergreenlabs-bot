@@ -8,6 +8,7 @@
     "tail": "wrangler tail",
     "migrate:local": "wrangler d1 execute evergreenlabs-bot --local --file migrations/0001_init.sql && wrangler d1 execute evergreenlabs-bot --local --file migrations/0002_pending_events.sql && wrangler d1 execute evergreenlabs-bot --local --file migrations/0003_board_events.sql",
     "migrate:remote": "wrangler d1 execute evergreenlabs-bot --remote --file migrations/0001_init.sql && wrangler d1 execute evergreenlabs-bot --remote --file migrations/0002_pending_events.sql && wrangler d1 execute evergreenlabs-bot --remote --file migrations/0003_board_events.sql",
+    "spike:board": "tsx scripts/spike-board-setup.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

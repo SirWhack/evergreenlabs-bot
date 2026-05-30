@@ -178,6 +178,44 @@ export async function getInstallationToken(env: GhAppEnv): Promise<string> {
   return cached.token;
 }
 
+export interface AppMetadata {
+  slug: string;
+  /** Webhook events the App is subscribed to (e.g. "push", "issues"). */
+  events: string[];
+  /** Default permissions the App declares (e.g. { issues: "write" }). */
+  permissions: Record<string, string>;
+}
+
+/**
+ * Fetch the App's own metadata via `GET /app` (App-JWT auth). Used by the
+ * board setup spike to confirm the App is subscribed to `issues` and has
+ * `issues: write`. Not on a hot path.
+ */
+export async function getAppMetadata(env: GhAppEnv): Promise<AppMetadata> {
+  const jwt = await signAppJwt(env);
+  const res = await fetch("https://api.github.com/app", {
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "evergreenlabs-bot",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`GET /app failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as {
+    slug?: string;
+    events?: string[];
+    permissions?: Record<string, string>;
+  };
+  return {
+    slug: body.slug ?? "",
+    events: body.events ?? [],
+    permissions: body.permissions ?? {},
+  };
+}
+
 /** Thin authenticated wrapper around fetch() for the REST API. */
 export async function ghFetch(
   env: GhAppEnv,
