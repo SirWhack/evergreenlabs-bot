@@ -15,3 +15,6 @@ bot/.dev.vars.local
 
 evergreenlabs-bot-webhook.2026-05-24.private-key.pem
 eval-results.json
+
+# Local agent worktrees — these are git worktrees, not source.
+.claude/worktrees/

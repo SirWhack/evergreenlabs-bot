@@ -1,0 +1,13 @@
+<!-- context-kernel-freshness
+graph: 4828895ec2ab8c46292fc502e3c028e8b68915c679ff81f463cf9148983976a0
+source-tree: 2dc3e766db3902774947b9cb0633b041b2a53f2820829b3c229b7947b8f52fa2
+materialized: 2026-05-27T21:03:14Z
+-->
+
+This scope implements the **Evergreen Labs Bot**, a cloud-native GitHub automation service deployed on Cloudflare Workers. Its core responsibility is to monitor GitHub repositories via webhooks, synchronize content between repos, and publish structured data files (siteData.js) to a website repository. The bot operates entirely within Cloudflare's serverless ecosystem, using Workflows for orchestration and D1 for persistent state, with no filesystem access.
+
+The public HTTP API surface consists of three endpoints: `POST /gh/webhook` for GitHub webhook intake (authenticated via HMAC `X-Hub-Signature-256`), `POST /trigger/daily-sync` for manual or cron-triggered synchronization (authenticated via Bearer token), and `GET /health` as an unauthenticated liveness probe. Two Cloudflare Workflows handle the core logic: `PER_REPO_UPDATE` (a singleton-per-repo workflow created on webhook receipt) and `DAILY_SYNC` (a cron/manual workflow for daily tasks). Both workflows write tracer rows to the `site_parts` D1 table and publish `_tracer` keys to `siteData.js` in the website repo.
+
+Internally, the bot is structured around several key modules. `lib/github.ts` handles GitHub App authentication using the Web Crypto API for JWT signing (supporting both PKCS#1 and PKCS#8 PEM formats) with token caching at module scope. `lib/verify.ts` provides HMAC signature verification for webhook security. `lib/llm.ts` centralizes all LLM interaction logic (using OpenRouter as the gateway). The database schema defines five tables: `site_parts`, `drafts`, `skipped_repos`, `cursors`, and `webhook_dedup` — with deduplication state intentionally stored in D1 rather than KV to avoid write costs and consistency issues.
+
+The bot depends on several external services and configurations. It requires a GitHub App with specific permissions (Contents Read/Write on the website repo, Contents Read and Metadata Read on source repos, Pull Requests Read) and webhook subscriptions for push, pull_request, create, delete events. Secrets managed via `wrangler secret` include `GITHUB_APP_ID`, `GITHUB_INSTALLATION_ID`, `GITHUB_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `OPENROUTER_API_KEY`, and `TRIGGER_AUTH_TOKEN`. The deployment pipeline uses `wrangler deploy` for production, with local development supported via `wrangler dev` with hot reload and a local D1 database for testing migrations and queries.

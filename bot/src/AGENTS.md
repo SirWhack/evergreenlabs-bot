@@ -1,0 +1,11 @@
+<!-- context-kernel-freshness
+graph: 4828895ec2ab8c46292fc502e3c028e8b68915c679ff81f463cf9148983976a0
+source-tree: a70f9c35e4552764c659913a2b9913e039f1a79f5e9e05f248224b041ed4a8ae
+materialized: 2026-05-27T21:03:14Z
+-->
+
+This scope is the Cloudflare Workers entry point for the Evergreen Labs bot. It receives incoming HTTP requests, authenticates them, and routes them to the appropriate handler. The scope's primary responsibility is to act as a thin request router and dispatcher, delegating all business logic to sub-modules. It exposes three public exports: `PerRepoUpdate`, `DailySync`, and `Env`. `PerRepoUpdate` and `DailySync` are the two Workflow bindings that Cloudflare will invoke to run scheduled or event-driven background jobs. `Env` is an interface that defines the entire environment contract for the worker, including bindings for the D1 database (`DB`), the two workflows, GitHub credentials (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`), an OpenRouter API key, a trigger token for manual syncs, an MCP token, and various project and site configuration strings.
+
+Internally, the scope defines several private helper functions. `handleWebhook` is the core routing function: it verifies the GitHub webhook signature using `verifyGitHubSignature` from `./lib/verify`, checks whether the event should be enqueued via `shouldEnqueue` from `./lib/filter`, and then calls `enqueuePendingEvent` and `seenDelivery` from `./lib/state` to persist the event. `handleManualDailySync` provides a simple bearer-token-authenticated endpoint to trigger a daily sync workflow manually. The helpers `bearerOk` and `timingSafeEqual` provide constant-time string comparison for authentication, and `json` is a utility for returning structured JSON responses.
+
+The scope follows a layered architecture: the entry point (`index.ts`) handles HTTP and authentication, while the actual business logic for filtering, state management, and MCP handling lives in the `./lib/` and `./mcp/` subdirectories. The `Env` interface acts as the dependency injection point, allowing the worker to be configured entirely through Cloudflare's environment variable and binding system. This design keeps the entry point thin and testable, with all significant logic abstracted behind module boundaries.
