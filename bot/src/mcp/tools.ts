@@ -2,14 +2,15 @@
 
 import type { Env } from "../index";
 import { getSitePart } from "../lib/state";
+import { createIssue, updateIssue } from "../lib/github";
 import {
-  createDraftItem,
-  createIssueAndAddToBoard,
+  addItemByContentId,
   updateItemField,
-  archiveItem,
+  getItemRef,
   listBoardItems,
   getProjectSchema,
 } from "./board";
+import { applyStatusToIssue } from "../pipelines/issue_sync";
 
 interface ToolDef {
   name: string;
@@ -71,7 +72,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "create_item",
     description:
-      "Add an item to the user's personal project board. When repo is provided, creates a real GitHub issue in that repo and adds it to the board (giving it a URL and repo link). Without repo, creates a draft. Keep titles short and descriptive (e.g. 'Add temporal tracking to graph'). Always pass repo with the owner/repo of the repo you are working in. Always pass status. Call get_board_schema first if you need valid field values.",
+      "Create a GitHub issue in a repo and add it to the cross-repo project board. Every board item is a real issue — repo is required. Keep titles short and descriptive (e.g. 'Add temporal tracking to graph'), written like a roadmap item a stranger would understand. Pass status; setting status to a closed value (Done / Won't Do) creates the issue already closed. Call get_board_schema first if you need valid field values.",
     inputSchema: {
       type: "object",
       properties: {
@@ -79,6 +80,15 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
           type: "string",
           description:
             "Short, clear task title. Write it like a roadmap item a stranger would understand, not an implementation note.",
+        },
+        repo: {
+          type: "string",
+          description:
+            "Required. The owner/repo to open the issue in — normally the repo you are working in.",
+        },
+        body: {
+          type: "string",
+          description: "Optional issue body / description.",
         },
         status: {
           type: "string",
@@ -89,19 +99,14 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
           type: "string",
           description: "Item type (e.g. Bug, Feature, Chore)",
         },
-        repo: {
-          type: "string",
-          description:
-            "The owner/repo this item belongs to. Always set this to the repo you are working in.",
-        },
       },
-      required: ["title"],
+      required: ["title", "repo"],
     },
   },
   {
     name: "update_item",
     description:
-      "Update fields on an existing board item. Get item_id from list_items or create_item first.",
+      "Update an existing board item. Setting status drives the underlying GitHub issue's lifecycle: a closed status (Done / Won't Do) closes the issue with the matching reason; an open status (Todo / In Progress) reopens it if needed. Can also edit the issue title/body. Get item_id from list_items or create_item first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -112,6 +117,8 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
         },
         priority: { type: "string", description: "New priority" },
         kind: { type: "string", description: "New kind/type" },
+        title: { type: "string", description: "New issue title" },
+        body: { type: "string", description: "New issue body" },
       },
       required: ["item_id"],
     },
@@ -119,7 +126,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   {
     name: "close_item",
     description:
-      "Archive a board item (marks it done and removes from active view). Use when work is complete.",
+      "Mark a board item Done and close its GitHub issue (completed). Convenience for update_item with status=Done. Use when work is finished.",
     inputSchema: {
       type: "object",
       properties: {
@@ -156,10 +163,8 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
 // ---------------------------------------------------------------------------
 
 const FIELD_CANDIDATES: Record<string, string[]> = {
-  status: ["Status"],
   priority: ["Priority"],
   kind: ["Type", "Kind", "Category"],
-  repo: ["Repository", "Repo"],
 };
 
 async function setFieldWithFallbacks(
@@ -190,10 +195,11 @@ async function getRepoContext(
 
   const shortName = repo.includes("/") ? repo.split("/")[1] : repo;
 
-  const [projects, roadmap, log, drafts, cursors, skipRow] =
+  const [projects, boardItems, log, drafts, cursors, skipRow] =
     await Promise.all([
       getSitePart<Array<Record<string, unknown>>>(env.DB, "projects"),
-      getSitePart<Array<Record<string, unknown>>>(env.DB, "roadmap"),
+      // Live board read (ADR-0003) — not the stale daily roadmap snapshot.
+      listBoardItems(env, repo).catch(() => [] as Array<Record<string, unknown>>),
       getSitePart<Array<Record<string, unknown>>>(env.DB, "log"),
       env.DB
         .prepare(
@@ -225,10 +231,7 @@ async function getRepoContext(
         String(p.links && (p.links as Record<string, unknown>).repo).includes(repo),
     ) ?? null;
 
-  const boardItems = (roadmap ?? []).filter(
-    (r) =>
-      r.repo === repo || String(r.repo ?? "").endsWith(`/${shortName}`),
-  );
+  // boardItems is already scoped to this repo by listBoardItems above.
 
   const recentLogs = (log ?? [])
     .filter((l) => l.project === shortName)
@@ -346,23 +349,35 @@ async function handleCreateItem(
   if (!title) return errorResult("title is required");
 
   const repo = args.repo ? String(args.repo) : null;
+  if (!repo) {
+    return errorResult(
+      "repo is required — every board item is a real GitHub issue (ADR-0003).",
+    );
+  }
+  const body = args.body ? String(args.body) : undefined;
 
   try {
-    let itemId: string;
-    let issueUrl: string | null = null;
-
-    if (repo) {
-      const result = await createIssueAndAddToBoard(env, repo, title);
-      itemId = result.itemId;
-      issueUrl = result.issueUrl;
-    } else {
-      itemId = await createDraftItem(env, title);
-    }
+    // Create the issue (open), then add it to the board.
+    const issue = await createIssue(env, repo, title, body);
+    const itemId = await addItemByContentId(env, issue.nodeId);
 
     const fieldsSet: string[] = [];
     const fieldErrors: string[] = [];
 
-    for (const argName of ["status", "priority", "kind"] as const) {
+    // Status drives issue lifecycle — route it through the reconciler so a
+    // Done/Won't Do at creation also closes the freshly-opened issue.
+    if (args.status) {
+      try {
+        await applyStatusToIssue(env, itemId, String(args.status));
+        fieldsSet.push("status");
+      } catch (err) {
+        fieldErrors.push(
+          `status: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    for (const argName of ["priority", "kind"] as const) {
       if (!args[argName]) continue;
       const err = await setFieldWithFallbacks(
         env,
@@ -378,8 +393,9 @@ async function handleCreateItem(
       JSON.stringify({
         itemId,
         title,
-        ...(issueUrl ? { issueUrl } : {}),
-        ...(repo ? { repo } : {}),
+        repo,
+        issueUrl: issue.htmlUrl,
+        issueNumber: issue.number,
         fieldsSet,
         ...(fieldErrors.length ? { fieldErrors } : {}),
       }),
@@ -398,21 +414,56 @@ async function handleUpdateItem(
   const itemId = String(args.item_id ?? "");
   if (!itemId) return errorResult("item_id is required");
 
-  const updates: Array<[string, string]> = [];
-  for (const argName of ["status", "priority", "kind"] as const) {
-    if (args[argName]) updates.push([argName, String(args[argName])]);
-  }
-  if (updates.length === 0) {
+  const hasAny = ["status", "priority", "kind", "title", "body"].some(
+    (k) => args[k],
+  );
+  if (!hasAny) {
     return errorResult(
-      "No fields to update. Provide status, priority, or kind.",
+      "No fields to update. Provide status, priority, kind, title, or body.",
     );
   }
 
   const results: string[] = [];
-  for (const [argName, value] of updates) {
+
+  // Status first — it drives the issue's open/closed state via the reconciler.
+  if (args.status) {
+    try {
+      const r = await applyStatusToIssue(env, itemId, String(args.status));
+      const suffix = r.issueAction !== "none" ? ` (issue ${r.issueAction})` : "";
+      results.push(`status → ${r.toStatus}${suffix}`);
+    } catch (err) {
+      results.push(`status: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  for (const argName of ["priority", "kind"] as const) {
+    if (!args[argName]) continue;
+    const value = String(args[argName]);
     const err = await setFieldWithFallbacks(env, itemId, argName, value);
     results.push(err ? `${argName}: ${err}` : `${argName} → ${value}`);
   }
+
+  // Title/body edits go to the backing issue.
+  if (args.title || args.body) {
+    try {
+      const ref = await getItemRef(env, itemId);
+      if (!ref?.repo || ref.issueNumber == null) {
+        results.push("title/body: item has no backing issue");
+      } else {
+        await updateIssue(env, ref.repo, ref.issueNumber, {
+          ...(args.title ? { title: String(args.title) } : {}),
+          ...(args.body ? { body: String(args.body) } : {}),
+        });
+        if (args.title) results.push(`title → ${String(args.title)}`);
+        if (args.body) results.push("body updated");
+      }
+    } catch (err) {
+      results.push(
+        `title/body: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   return textResult(results.join("\n"));
 }
 
@@ -424,11 +475,12 @@ async function handleCloseItem(
   if (!itemId) return errorResult("item_id is required");
 
   try {
-    await archiveItem(env, itemId);
-    return textResult(`Archived item ${itemId}`);
+    const r = await applyStatusToIssue(env, itemId, "Done");
+    const suffix = r.issueAction !== "none" ? ` (issue ${r.issueAction})` : "";
+    return textResult(`Closed item ${itemId} → Done${suffix}`);
   } catch (err) {
     return errorResult(
-      `Failed to archive: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to close: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }

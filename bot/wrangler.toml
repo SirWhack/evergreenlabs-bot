@@ -10,7 +10,10 @@ compatibility_flags = ["nodejs_compat"]
 # Non-secret config. Secrets (GITHUB_WEBHOOK_SECRET, GITHUB_APP_PRIVATE_KEY,
 # GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, OPENROUTER_API_KEY, TRIGGER_TOKEN,
 # MCP_TOKEN, GITHUB_PAT_PROJECTS, DIFFUSION_KEY) are set via `wrangler secret put`
-# and never live in this file.
+# and never live in this file. (ADR-0003 revised §D1: the board is org-owned
+# but the repos stay under the user, so the App can't span both accounts — a
+# user PAT (GITHUB_PAT_PROJECTS, project scope) drives the org board; the App
+# handles repo/issue ops as before.)
 # ---------------------------------------------------------------------------
 [vars]
 GITHUB_USERNAME      = "SirWhack"
@@ -18,7 +21,10 @@ WEBSITE_REPO_OWNER   = "SirWhack"
 WEBSITE_REPO_NAME    = "evergreenlabs"
 SITE_DATA_PATH       = "src/content/siteData.js"
 LLM_MODEL            = "anthropic/claude-haiku-4.5"
-GITHUB_PROJECT_NUMBER = "2"
+# Org that owns the Projects v2 board (reached via GITHUB_PAT_PROJECTS, since
+# the App is installed on the user account, not the org). See ADR-0003.
+GITHUB_PROJECT_OWNER = "EvergreenLabs-US"
+GITHUB_PROJECT_NUMBER = "1"
 
 # ---------------------------------------------------------------------------
 # D1 — single database for all mutable state (ADR-0001 §D2).

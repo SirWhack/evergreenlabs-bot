@@ -53,8 +53,25 @@ describe("shouldEnqueue", () => {
     expect(shouldEnqueue("pull_request", payload, OWNER)).toBe(false);
   });
 
+  it("accepts lifecycle-relevant issues actions", () => {
+    for (const action of ["opened", "closed", "reopened", "edited"]) {
+      const payload = { action, repository: { owner: { login: OWNER } } };
+      expect(shouldEnqueue("issues", payload, OWNER)).toBe(true);
+    }
+  });
+
+  it("rejects non-lifecycle issues actions", () => {
+    const payload = { action: "labeled", repository: { owner: { login: OWNER } } };
+    expect(shouldEnqueue("issues", payload, OWNER)).toBe(false);
+  });
+
+  it("rejects issues from a different owner", () => {
+    const payload = { action: "opened", repository: { owner: { login: "someone-else" } } };
+    expect(shouldEnqueue("issues", payload, OWNER)).toBe(false);
+  });
+
   it("rejects unknown event types", () => {
     const payload = { repository: { owner: { login: OWNER } } };
-    expect(shouldEnqueue("issues", payload, OWNER)).toBe(false);
+    expect(shouldEnqueue("star", payload, OWNER)).toBe(false);
   });
 });

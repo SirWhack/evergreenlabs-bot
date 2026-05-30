@@ -1,11 +1,45 @@
-// GitHub Projects v2 GraphQL mutations for board management.
-// Uses GITHUB_PAT_PROJECTS (classic PAT) because GitHub Apps
-// cannot access user-owned Projects v2.
+// GitHub Projects v2 board access (ADR-0003, revised §D1).
+//
+// The board is an ORG-OWNED Projects v2 project, but the tracked repos stay
+// under the user account. A GitHub App installation is scoped to a single
+// account, so it can't span user-repos + org-project. A PAT *you* own is not
+// installation-scoped — it reaches both your repos and the org project (org
+// admin) — so all board operations use a classic/fine-grained PAT here.
+// (Issue create/close/reopen still go through the App; see lib/github.ts.)
 
 export interface BoardEnv {
+  /** PAT (project scope) owned by a user who can reach the org project. */
   GITHUB_PAT_PROJECTS: string;
-  GITHUB_USERNAME: string;
+  /** Org login that owns the Projects v2 board. */
+  GITHUB_PROJECT_OWNER: string;
   GITHUB_PROJECT_NUMBER?: string;
+}
+
+async function patGraphQL<T>(
+  env: BoardEnv,
+  query: string,
+  variables: Record<string, unknown> = {},
+): Promise<T> {
+  const res = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_PAT_PROJECTS}`,
+      "Content-Type": "application/json",
+      "User-Agent": "evergreenlabs-bot",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!res.ok) {
+    throw new Error(`Board GraphQL HTTP ${res.status}: ${await res.text()}`);
+  }
+  const body = (await res.json()) as {
+    data?: T;
+    errors?: Array<{ message: string }>;
+  };
+  if (body.errors?.length) {
+    throw new Error(`Board GraphQL: ${body.errors[0].message}`);
+  }
+  return body.data as T;
 }
 
 interface FieldDef {
@@ -24,36 +58,15 @@ let cachedSchema: ProjectSchema | null = null;
 let cacheExpiry = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-async function patGraphQL<T>(
-  env: BoardEnv,
-  query: string,
-  variables: Record<string, unknown> = {},
-): Promise<T> {
-  const res = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.GITHUB_PAT_PROJECTS}`,
-      "Content-Type": "application/json",
-      "User-Agent": "evergreenlabs-bot",
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  if (!res.ok) {
-    throw new Error(`GraphQL HTTP ${res.status}: ${await res.text()}`);
-  }
-  const body = (await res.json()) as {
-    data?: T;
-    errors?: Array<{ message: string }>;
-  };
-  if (body.errors?.length) {
-    throw new Error(`GraphQL: ${body.errors[0].message}`);
-  }
-  return body.data as T;
+function projectNumber(env: BoardEnv): number {
+  const num = parseInt(env.GITHUB_PROJECT_NUMBER ?? "", 10);
+  if (!num) throw new Error("GITHUB_PROJECT_NUMBER not configured");
+  return num;
 }
 
 const SCHEMA_QUERY = `
 query($login: String!, $number: Int!) {
-  user(login: $login) {
+  organization(login: $login) {
     projectV2(number: $number) {
       id
       fields(first: 50) {
@@ -86,39 +99,38 @@ interface SchemaFieldNode {
 }
 
 interface SchemaResponse {
-  user: {
+  organization: {
     projectV2: {
       id: string;
       fields: { nodes: SchemaFieldNode[] };
     } | null;
-  };
+  } | null;
 }
 
 export async function getProjectSchema(env: BoardEnv): Promise<ProjectSchema> {
   if (cachedSchema && Date.now() < cacheExpiry) return cachedSchema;
 
-  const num = parseInt(env.GITHUB_PROJECT_NUMBER ?? "", 10);
-  if (!num) throw new Error("GITHUB_PROJECT_NUMBER not configured");
-
+  const num = projectNumber(env);
   const data = await patGraphQL<SchemaResponse>(env, SCHEMA_QUERY, {
-    login: env.GITHUB_USERNAME,
+    login: env.GITHUB_PROJECT_OWNER,
     number: num,
   });
 
-  const project = data.user?.projectV2;
-  if (!project) throw new Error(`Project #${num} not found`);
+  const project = data.organization?.projectV2;
+  if (!project) {
+    throw new Error(
+      `Project #${num} not found under org ${env.GITHUB_PROJECT_OWNER}`,
+    );
+  }
 
   const fields = new Map<string, FieldDef>();
   for (const node of project.fields.nodes) {
-    const isSingleSelect =
-      node.__typename === "ProjectV2SingleSelectField";
+    const isSingleSelect = node.__typename === "ProjectV2SingleSelectField";
     const type = isSingleSelect ? ("single_select" as const) : ("text" as const);
-
     const options =
       isSingleSelect && node.options
         ? new Map(node.options.map((o) => [o.name.toLowerCase(), o.id]))
         : undefined;
-
     fields.set(node.name.toLowerCase(), {
       id: node.id,
       name: node.name,
@@ -141,51 +153,16 @@ export function invalidateSchemaCache(): void {
 // Mutations
 // ---------------------------------------------------------------------------
 
-export async function createDraftItem(
+/**
+ * Add an existing issue/PR (by GraphQL content node id) to the board and
+ * return the project item id. Idempotent: GitHub returns the existing item
+ * if the content is already on the board, so the reconciler can call this
+ * unconditionally.
+ */
+export async function addItemByContentId(
   env: BoardEnv,
-  title: string,
+  contentNodeId: string,
 ): Promise<string> {
-  const schema = await getProjectSchema(env);
-  const data = await patGraphQL<{
-    addProjectV2DraftIssue: { projectItem: { id: string } };
-  }>(
-    env,
-    `mutation($projectId: ID!, $title: String!) {
-      addProjectV2DraftIssue(input: { projectId: $projectId, title: $title }) {
-        projectItem { id }
-      }
-    }`,
-    { projectId: schema.projectId, title },
-  );
-  return data.addProjectV2DraftIssue.projectItem.id;
-}
-
-export interface IssueItemEnv extends BoardEnv {
-  GITHUB_APP_ID: string;
-  GITHUB_APP_INSTALLATION_ID: string;
-  GITHUB_APP_PRIVATE_KEY: string;
-}
-
-export async function createIssueAndAddToBoard(
-  env: IssueItemEnv,
-  repo: string,
-  title: string,
-  body?: string,
-): Promise<{ itemId: string; issueUrl: string; issueNodeId: string }> {
-  const { ghFetch } = await import("../lib/github");
-
-  const res = await ghFetch(env, `/repos/${repo}/issues`, {
-    method: "POST",
-    body: JSON.stringify({ title, body: body ?? "" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to create issue in ${repo}: ${res.status} ${await res.text()}`);
-  }
-  const issue = (await res.json()) as {
-    node_id: string;
-    html_url: string;
-  };
-
   const schema = await getProjectSchema(env);
   const data = await patGraphQL<{
     addProjectV2ItemById: { item: { id: string } };
@@ -196,14 +173,9 @@ export async function createIssueAndAddToBoard(
         item { id }
       }
     }`,
-    { projectId: schema.projectId, contentId: issue.node_id },
+    { projectId: schema.projectId, contentId: contentNodeId },
   );
-
-  return {
-    itemId: data.addProjectV2ItemById.item.id,
-    issueUrl: issue.html_url,
-    issueNodeId: issue.node_id,
-  };
+  return data.addProjectV2ItemById.item.id;
 }
 
 export async function updateItemField(
@@ -216,9 +188,7 @@ export async function updateItemField(
   const field = schema.fields.get(fieldName.toLowerCase());
   if (!field) {
     const available = [...schema.fields.keys()].join(", ");
-    throw new Error(
-      `Unknown field "${fieldName}". Available: ${available}`,
-    );
+    throw new Error(`Unknown field "${fieldName}". Available: ${available}`);
   }
 
   let fieldValue: Record<string, unknown>;
@@ -253,10 +223,7 @@ export async function updateItemField(
   );
 }
 
-export async function archiveItem(
-  env: BoardEnv,
-  itemId: string,
-): Promise<void> {
+export async function archiveItem(env: BoardEnv, itemId: string): Promise<void> {
   const schema = await getProjectSchema(env);
   await patGraphQL(
     env,
@@ -270,7 +237,100 @@ export async function archiveItem(
 }
 
 // ---------------------------------------------------------------------------
-// Query — lightweight item list (no LLM commentary, unlike roadmap_sync)
+// Item lookup — resolve a board item id back to its underlying issue + status.
+// Needed for the board→issue reconcile direction and for editing title/body.
+// ---------------------------------------------------------------------------
+
+export interface ItemRef {
+  itemId: string;
+  /** owner/name of the backing issue, or null for non-issue content. */
+  repo: string | null;
+  issueNumber: number | null;
+  issueState: "open" | "closed" | null;
+  /** Current board Status value, or null if unset. */
+  status: string | null;
+}
+
+const ITEM_REF_QUERY = `
+query($itemId: ID!) {
+  node(id: $itemId) {
+    ... on ProjectV2Item {
+      id
+      content {
+        __typename
+        ... on Issue { number state repository { nameWithOwner } }
+        ... on PullRequest { number state repository { nameWithOwner } }
+      }
+      fieldValues(first: 20) {
+        nodes {
+          __typename
+          ... on ProjectV2ItemFieldSingleSelectValue {
+            name
+            field { ... on ProjectV2SingleSelectField { name } }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+interface ItemRefResponse {
+  node: {
+    id: string;
+    content: {
+      __typename: string;
+      number?: number;
+      state?: string;
+      repository?: { nameWithOwner: string };
+    } | null;
+    fieldValues: {
+      nodes: Array<{
+        __typename: string;
+        name?: string;
+        field?: { name?: string };
+      }>;
+    };
+  } | null;
+}
+
+export async function getItemRef(
+  env: BoardEnv,
+  itemId: string,
+): Promise<ItemRef | null> {
+  const data = await patGraphQL<ItemRefResponse>(env, ITEM_REF_QUERY, { itemId });
+  const node = data.node;
+  if (!node) return null;
+
+  let status: string | null = null;
+  for (const fv of node.fieldValues?.nodes ?? []) {
+    if (
+      fv.__typename === "ProjectV2ItemFieldSingleSelectValue" &&
+      fv.field?.name?.toLowerCase() === "status" &&
+      fv.name
+    ) {
+      status = fv.name;
+    }
+  }
+
+  const content = node.content;
+  const state =
+    content?.state === "CLOSED" || content?.state === "closed"
+      ? ("closed" as const)
+      : content?.state === "OPEN" || content?.state === "open"
+        ? ("open" as const)
+        : null;
+
+  return {
+    itemId: node.id,
+    repo: content?.repository?.nameWithOwner ?? null,
+    issueNumber: content?.number ?? null,
+    issueState: state,
+    status,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Query — paginated item list (no LLM commentary, unlike roadmap_sync)
 // ---------------------------------------------------------------------------
 
 export interface BoardItem {
@@ -307,18 +367,22 @@ interface ItemNode {
 }
 
 interface ListItemsResponse {
-  user: {
+  organization: {
     projectV2: {
-      items: { nodes: ItemNode[] };
+      items: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: ItemNode[];
+      };
     } | null;
-  };
+  } | null;
 }
 
 const LIST_ITEMS_QUERY = `
-query($login: String!, $number: Int!) {
-  user(login: $login) {
+query($login: String!, $number: Int!, $after: String) {
+  organization(login: $login) {
     projectV2(number: $number) {
-      items(first: 100) {
+      items(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           updatedAt
@@ -347,22 +411,14 @@ query($login: String!, $number: Int!) {
   }
 }`;
 
-function extractFieldValues(
-  nodes: ItemFieldValueNode[],
-): Record<string, string> {
+function extractFieldValues(nodes: ItemFieldValueNode[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const fv of nodes) {
     const fname = fv.field?.name?.toLowerCase();
     if (!fname) continue;
-    if (
-      fv.__typename === "ProjectV2ItemFieldSingleSelectValue" &&
-      fv.name
-    ) {
+    if (fv.__typename === "ProjectV2ItemFieldSingleSelectValue" && fv.name) {
       out[fname] = fv.name;
-    } else if (
-      fv.__typename === "ProjectV2ItemFieldTextValue" &&
-      fv.text
-    ) {
+    } else if (fv.__typename === "ProjectV2ItemFieldTextValue" && fv.text) {
       out[fname] = fv.text;
     }
   }
@@ -388,46 +444,54 @@ export async function listBoardItems(
   const num = parseInt(env.GITHUB_PROJECT_NUMBER ?? "", 10);
   if (!num) return [];
 
-  const data = await patGraphQL<ListItemsResponse>(env, LIST_ITEMS_QUERY, {
-    login: env.GITHUB_USERNAME,
-    number: num,
-  });
-
-  const nodes = data.user?.projectV2?.items?.nodes ?? [];
   const out: BoardItem[] = [];
+  let after: string | null = null;
 
-  for (const node of nodes) {
-    const content = node.content ?? ({} as Partial<ItemContentNode>);
-    const fields = extractFieldValues(node.fieldValues?.nodes ?? []);
-    const status = pickField(fields, "status", "state") ?? "Untriaged";
-    const repo =
-      content.repository?.nameWithOwner ??
-      pickField(fields, "repo", "repository") ??
-      null;
+  // Paginate the full board — a cross-repo tracker can exceed one page.
+  do {
+    const data: ListItemsResponse = await patGraphQL<ListItemsResponse>(
+      env,
+      LIST_ITEMS_QUERY,
+      { login: env.GITHUB_PROJECT_OWNER, number: num, after },
+    );
+    const items = data.organization?.projectV2?.items;
+    if (!items) break;
 
-    if (repoFilter) {
-      const match =
-        repo === repoFilter ||
-        repo?.endsWith(`/${repoFilter}`) ||
-        repo?.toLowerCase() === repoFilter.toLowerCase();
-      if (!match) continue;
+    for (const node of items.nodes) {
+      const content = node.content ?? ({} as Partial<ItemContentNode>);
+      const fields = extractFieldValues(node.fieldValues?.nodes ?? []);
+      const status = pickField(fields, "status", "state") ?? "Untriaged";
+      const repo =
+        content.repository?.nameWithOwner ??
+        pickField(fields, "repo", "repository") ??
+        null;
+
+      if (repoFilter) {
+        const match =
+          repo === repoFilter ||
+          repo?.endsWith(`/${repoFilter}`) ||
+          repo?.toLowerCase() === repoFilter.toLowerCase();
+        if (!match) continue;
+      }
+      if (statusFilter && status.toLowerCase() !== statusFilter.toLowerCase()) {
+        continue;
+      }
+
+      out.push({
+        id: node.id,
+        title: content.title ?? "(untitled)",
+        status,
+        priority: pickField(fields, "priority"),
+        kind: pickField(fields, "type", "kind", "category"),
+        url: content.url ?? null,
+        repo,
+        isDraft: content.__typename === "DraftIssue",
+        updatedAt: node.updatedAt,
+      });
     }
-    if (statusFilter && status.toLowerCase() !== statusFilter.toLowerCase()) {
-      continue;
-    }
 
-    out.push({
-      id: node.id,
-      title: content.title ?? "(untitled)",
-      status,
-      priority: pickField(fields, "priority"),
-      kind: pickField(fields, "type", "kind", "category"),
-      url: content.url ?? null,
-      repo,
-      isDraft: content.__typename === "DraftIssue",
-      updatedAt: node.updatedAt,
-    });
-  }
+    after = items.pageInfo.hasNextPage ? items.pageInfo.endCursor : null;
+  } while (after);
 
   return out;
 }

@@ -1,10 +1,11 @@
 // Daily sync Workflow. Triggered both by cron (`0 3 * * *`) and manually via
 // POST /trigger/daily-sync. Steps: project_sync → introduce backstop →
-// roadmap_sync → publish.
+// issue_sync (cross-repo board mirror) → roadmap_sync → publish.
 
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { runProjectSync, type ProjectEntry, type ProjectSyncSummary } from "../pipelines/project_sync";
 import { introduceOrphans } from "../pipelines/introduce";
+import { runIssueSync, type IssueSyncSummary } from "../pipelines/issue_sync";
 import { runRoadmapSync, type RoadmapEntry, type RoadmapSyncSummary } from "../pipelines/roadmap_sync";
 import { publishSiteData } from "../lib/publish";
 import { getSitePart } from "../lib/state";
@@ -15,6 +16,7 @@ export interface DailySyncEnv {
   GITHUB_APP_INSTALLATION_ID: string;
   GITHUB_APP_PRIVATE_KEY: string;
   GITHUB_USERNAME: string;
+  GITHUB_PROJECT_OWNER: string;
   GITHUB_PROJECT_NUMBER?: string;
   GITHUB_PAT_PROJECTS: string;
   OPENROUTER_API_KEY: string;
@@ -37,6 +39,13 @@ export class DailySync extends WorkflowEntrypoint<DailySyncEnv, DailySyncParams>
 
     await step.do("introduce_backstop", async () => {
       return introduceOrphans(this.env);
+    });
+
+    // ADR-0003: mirror every repo's issues onto the board, catching anything
+    // missed between webhook windows. Runs before roadmap_sync so the roadmap
+    // reflects the freshly-reconciled board.
+    await step.do("issue_sync", async (): Promise<IssueSyncSummary> => {
+      return await runIssueSync(this.env);
     });
 
     await step.do("roadmap_sync", async (): Promise<RoadmapSyncSummary> => {

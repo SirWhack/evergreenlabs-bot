@@ -25,6 +25,7 @@ export interface Env {
   OPENROUTER_API_KEY: string;
   TRIGGER_TOKEN: string;
   MCP_TOKEN: string;
+  /** PAT (project scope) for the org-owned board — see ADR-0003 revised §D1. */
   GITHUB_PAT_PROJECTS: string;
 
   // Vars
@@ -33,6 +34,8 @@ export interface Env {
   WEBSITE_REPO_NAME: string;
   SITE_DATA_PATH: string;
   LLM_MODEL: string;
+  /** Org login that owns the Projects v2 board (ADR-0003). */
+  GITHUB_PROJECT_OWNER: string;
   GITHUB_PROJECT_NUMBER: string;
 }
 
