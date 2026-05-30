@@ -310,6 +310,136 @@ export async function fetchReadme(
   return res.text();
 }
 
+// ---------------------------------------------------------------------------
+// Issues — App-authenticated REST (ADR-0003). The board is fed by reconciling
+// real GitHub issues, so we need to read, create, close, reopen, and edit them.
+// ---------------------------------------------------------------------------
+
+export type IssueState = "open" | "closed";
+export type IssueStateReason = "completed" | "not_planned" | "reopened" | null;
+
+/** Minimal issue shape the board reconciler needs. Mirrors the REST payload. */
+export interface GhIssue {
+  number: number;
+  nodeId: string;
+  title: string;
+  htmlUrl: string;
+  state: IssueState;
+  stateReason: IssueStateReason;
+  /** True when the REST item is actually a PR (issues API returns both). */
+  isPullRequest: boolean;
+}
+
+function toGhIssue(raw: Record<string, unknown>): GhIssue {
+  return {
+    number: Number(raw.number),
+    nodeId: String(raw.node_id),
+    title: String(raw.title ?? ""),
+    htmlUrl: String(raw.html_url ?? ""),
+    state: (raw.state === "closed" ? "closed" : "open") as IssueState,
+    stateReason: (raw.state_reason ?? null) as IssueStateReason,
+    isPullRequest: raw.pull_request != null,
+  };
+}
+
+/** Create an issue in `repo` (owner/name). Returns the created issue. */
+export async function createIssue(
+  env: GhAppEnv,
+  repo: string,
+  title: string,
+  body?: string,
+): Promise<GhIssue> {
+  const res = await ghFetch(env, `/repos/${repo}/issues`, {
+    method: "POST",
+    body: JSON.stringify({ title, body: body ?? "" }),
+  });
+  if (!res.ok) {
+    throw new Error(`createIssue ${repo}: ${res.status} ${await res.text()}`);
+  }
+  return toGhIssue((await res.json()) as Record<string, unknown>);
+}
+
+/** Close an issue, recording why (completed vs not_planned). */
+export async function closeIssue(
+  env: GhAppEnv,
+  repo: string,
+  issueNumber: number,
+  stateReason: "completed" | "not_planned",
+): Promise<void> {
+  const res = await ghFetch(env, `/repos/${repo}/issues/${issueNumber}`, {
+    method: "PATCH",
+    body: JSON.stringify({ state: "closed", state_reason: stateReason }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `closeIssue ${repo}#${issueNumber}: ${res.status} ${await res.text()}`,
+    );
+  }
+}
+
+/** Reopen a closed issue. */
+export async function reopenIssue(
+  env: GhAppEnv,
+  repo: string,
+  issueNumber: number,
+): Promise<void> {
+  const res = await ghFetch(env, `/repos/${repo}/issues/${issueNumber}`, {
+    method: "PATCH",
+    body: JSON.stringify({ state: "open" }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `reopenIssue ${repo}#${issueNumber}: ${res.status} ${await res.text()}`,
+    );
+  }
+}
+
+/** Edit an issue's title and/or body. */
+export async function updateIssue(
+  env: GhAppEnv,
+  repo: string,
+  issueNumber: number,
+  fields: { title?: string; body?: string },
+): Promise<void> {
+  const res = await ghFetch(env, `/repos/${repo}/issues/${issueNumber}`, {
+    method: "PATCH",
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `updateIssue ${repo}#${issueNumber}: ${res.status} ${await res.text()}`,
+    );
+  }
+}
+
+/**
+ * List every issue in `repo` (both open and closed), following pagination.
+ * Pull requests are filtered out — the REST issues endpoint returns them too.
+ * Used by the daily reconcile sweep, which must catch issues closed/opened
+ * outside the webhook window.
+ */
+export async function listAllIssues(
+  env: GhAppEnv,
+  repo: string,
+): Promise<GhIssue[]> {
+  let url: string | null =
+    `https://api.github.com/repos/${repo}/issues?state=all&per_page=100`;
+  const out: GhIssue[] = [];
+  while (url) {
+    const res: Response = await ghFetch(env, url);
+    if (!res.ok) {
+      throw new Error(`listAllIssues ${repo}: ${res.status} ${await res.text()}`);
+    }
+    const page = (await res.json()) as Array<Record<string, unknown>>;
+    for (const raw of page) {
+      const issue = toGhIssue(raw);
+      if (!issue.isPullRequest) out.push(issue);
+    }
+    url = parseNextLink(res.headers.get("Link"));
+  }
+  return out;
+}
+
 /**
  * Parse a GitHub Link header to extract the rel="next" URL, or null if absent.
  * Format example:

@@ -24,6 +24,12 @@ export function shouldEnqueue(event: string, payload: any, expectedOwner: string
   if (event === "pull_request") {
     return payload?.action === "closed" && payload?.pull_request?.merged === true;
   }
+  if (event === "issues") {
+    // Cross-repo board ingest (ADR-0003). Lifecycle-relevant actions only;
+    // label/assignee/milestone churn doesn't change open/closed state.
+    const action: string = payload?.action ?? "";
+    return ["opened", "closed", "reopened", "edited"].includes(action);
+  }
   if (event === "create" || event === "delete" || event === "repository") {
     return true;
   }
@@ -47,6 +53,8 @@ export function extractRecord(event: string, payload: any, deliveryId: string): 
     base.branch = payload?.pull_request?.base?.ref;
   } else if (event === "create" || event === "delete") {
     base.branch = payload?.ref;
+  } else if (event === "issues") {
+    base.action = payload?.action;
   }
   return base;
 }

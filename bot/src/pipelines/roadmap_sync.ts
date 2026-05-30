@@ -43,9 +43,10 @@ export interface RoadmapSyncSummary {
 
 export interface RoadmapSyncEnv extends GhAppEnv, LlmEnv {
   DB: D1Database;
-  GITHUB_USERNAME: string;
+  /** Org login that owns the board (ADR-0003 revised §D1). */
+  GITHUB_PROJECT_OWNER: string;
   GITHUB_PROJECT_NUMBER?: string;
-  /** Classic PAT with `read:project` scope — GitHub Apps can't access user-owned Projects v2. */
+  /** PAT (project scope) — reaches the org project from the user account. */
   GITHUB_PAT_PROJECTS: string;
 }
 
@@ -55,7 +56,7 @@ export interface RoadmapSyncEnv extends GhAppEnv, LlmEnv {
 
 const PROJECTS_V2_QUERY = `
 query($login: String!, $number: Int!) {
-  user(login: $login) {
+  organization(login: $login) {
     projectV2(number: $number) {
       id
       title
@@ -213,7 +214,7 @@ interface ProjectItemNode {
 }
 
 interface ProjectsV2Response {
-  user: {
+  organization: {
     projectV2: {
       id: string;
       title: string;
@@ -221,7 +222,7 @@ interface ProjectsV2Response {
       url: string;
       items: { nodes: ProjectItemNode[] };
     } | null;
-  };
+  } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -268,8 +269,9 @@ export async function runRoadmapSync(
     return summary;
   }
 
-  // Fetch Projects v2 items via GraphQL using a classic PAT — GitHub Apps
-  // cannot access user-owned Projects v2 (platform limitation).
+  // Fetch Projects v2 items via a user-owned PAT (ADR-0003 revised §D1). The
+  // board is org-owned but the repos stay under the user; only a PAT spans
+  // both, so the App can't read the board.
   let items: ProjectItemNode[];
   try {
     const res = await fetch("https://api.github.com/graphql", {
@@ -281,7 +283,7 @@ export async function runRoadmapSync(
       },
       body: JSON.stringify({
         query: PROJECTS_V2_QUERY,
-        variables: { login: env.GITHUB_USERNAME, number: projectNumber },
+        variables: { login: env.GITHUB_PROJECT_OWNER, number: projectNumber },
       }),
     });
     if (!res.ok) {
@@ -291,9 +293,9 @@ export async function runRoadmapSync(
     if (body.errors?.length) {
       throw new Error(body.errors[0].message);
     }
-    const project = body.data?.user?.projectV2;
+    const project = body.data?.organization?.projectV2;
     if (!project) {
-      summary.error = `Project #${projectNumber} not found under user ${env.GITHUB_USERNAME}`;
+      summary.error = `Project #${projectNumber} not found under org ${env.GITHUB_PROJECT_OWNER}`;
       return summary;
     }
     items = project.items.nodes ?? [];

@@ -280,3 +280,38 @@ function safeParse(s: string): unknown {
     return {};
   }
 }
+
+// ---------------------------------------------------------------------------
+// board_events — append-only lifecycle history (ADR-0003 §D7). One row per
+// Status transition, regardless of which direction drove it.
+// ---------------------------------------------------------------------------
+
+export interface BoardEventArgs {
+  item_id: string;
+  repo: string | null;
+  issue_number: number | null;
+  /** Null for the first observation of an item (fresh ingest). */
+  from_status: string | null;
+  to_status: string;
+}
+
+/** Record a Status transition. Append-only — never updated or deleted. */
+export async function insertBoardEvent(
+  db: D1Database,
+  args: BoardEventArgs,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO board_events (item_id, repo, issue_number, from_status, to_status, at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+    )
+    .bind(
+      args.item_id,
+      args.repo,
+      args.issue_number,
+      args.from_status,
+      args.to_status,
+      nowSeconds(),
+    )
+    .run();
+}

@@ -41,6 +41,8 @@ import {
 import { draftLogEntries, type LogDraft } from "../pipelines/log_drafter";
 import { introduceRepo } from "../pipelines/introduce";
 import { updateNow } from "../pipelines/now_updater";
+import { reconcileIssueToBoard } from "../pipelines/issue_sync";
+import type { GhIssue } from "../lib/github";
 
 const DEBOUNCE_SECONDS = 30;
 const LOG_DRAFTER_PIPELINE = "log_drafter";
@@ -57,6 +59,25 @@ export interface PerRepoEnv extends GhAppEnv {
   LLM_MODEL?: string;
   // Slice 5: introduce needs GITHUB_USERNAME to list repos
   GITHUB_USERNAME: string;
+  // ADR-0003: board reconcile for `issues` events
+  GITHUB_PROJECT_OWNER: string;
+  GITHUB_PROJECT_NUMBER?: string;
+  GITHUB_PAT_PROJECTS: string;
+}
+
+/** Map a raw webhook `issues` payload to the shape reconcileIssueToBoard wants. */
+function issueFromPayload(payload: any): GhIssue | null {
+  const raw = payload?.issue;
+  if (!raw || raw.number == null || !raw.node_id) return null;
+  return {
+    number: Number(raw.number),
+    nodeId: String(raw.node_id),
+    title: String(raw.title ?? ""),
+    htmlUrl: String(raw.html_url ?? ""),
+    state: raw.state === "closed" ? "closed" : "open",
+    stateReason: raw.state_reason ?? null,
+    isPullRequest: raw.pull_request != null,
+  };
 }
 
 export interface PerRepoParams {
@@ -95,11 +116,34 @@ export class PerRepoUpdate extends WorkflowEntrypoint<PerRepoEnv, PerRepoParams>
       const hasRepositoryCreated = events.some(
         (ev) => ev.event === "repository" && (ev.payload as any)?.action === "created",
       );
+      const issues = events
+        .filter((ev) => ev.event === "issues")
+        .map((ev) => issueFromPayload(ev.payload))
+        .filter((i): i is GhIssue => i !== null);
       const commits = extractUniqueCommits(events, repoFullName, repoShortName);
-      return { commits, hasRepositoryCreated };
+      return { commits, hasRepositoryCreated, issues };
     });
 
-    const { commits, hasRepositoryCreated } = drainResult;
+    const { commits, hasRepositoryCreated, issues } = drainResult;
+
+    // --- ADR-0003: reconcile issue events onto the cross-repo board ---
+    // Runs regardless of whether there are commits to draft — an `issues`
+    // event carries no commits. Reconcile is idempotent, so the board edit
+    // that closes/reopens an issue produces a webhook that no-ops here.
+    if (issues.length > 0) {
+      await step.do("reconcile-issues", async () => {
+        const results: Array<{ number: number; status: string | null }> = [];
+        for (const issue of issues) {
+          try {
+            const status = await reconcileIssueToBoard(this.env, repoFullName, issue);
+            results.push({ number: issue.number, status });
+          } catch (e) {
+            console.error("per-repo: reconcileIssueToBoard failed", issue.number, e);
+          }
+        }
+        return results;
+      });
+    }
 
     // --- Slice 5: introduce step for repository.created events ---
     // Runs BEFORE log_drafter so the new project card exists before any log
